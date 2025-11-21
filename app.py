@@ -608,7 +608,7 @@ with st.form("feedback_form"):
             st.error(f"Failed to save feedback: {e}")
 
 # ======================== ATTRIBUTION FOOTER ========================
-st.markdown("""
+st.markdown(f"""
 <div class="attribution">
     <strong>📜 Legal & Data Attribution</strong><br><br>
     
@@ -628,4 +628,5 @@ st.markdown("""
     
     <small>CrimeCompare England © 2025 | User ID: <code>{user_id[:12]}...</code></small>
 </div>
-""".format(user_id=user_id), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
