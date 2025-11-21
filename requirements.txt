@@ -1,0 +1,7 @@
+streamlit
+python-dotenv
+supabase
+openai>=1.6.0
+requests
+pandas
+plotly
