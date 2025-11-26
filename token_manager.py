@@ -1,5 +1,5 @@
 from typing import Optional
-from supabase_utils import get_supabase_client, supabase_query
+from supabase_utils import get_supabase_client, supabase_query, init_supabase
 from telegram_utils import send_telegram_alert
 
 # Pricing for gpt-4o-mini (per 1K tokens)
@@ -35,27 +35,35 @@ def record_token_usage(user_id: str, model: str, prompt_tokens: int, completion_
         prompt_tokens: Number of input tokens
         completion_tokens: Number of output tokens
     """
+    # Ensure client available
+    try:
+        client = get_supabase_client()
+    except Exception:
+        try:
+            init_supabase()
+            client = get_supabase_client()
+        except Exception as e:
+            print(f"[Token Manager] Supabase not ready, skip recording: {e}")
+            return
+
     # Calculate cost
     cost = (prompt_tokens * PRICE_IN + completion_tokens * PRICE_OUT) / 1000
     
-    client = get_supabase_client()
-    
     # Insert token usage record
-    def insert_usage():
-        return client.table("token_usage").insert({
-            "user_id": user_id,
-            "model": model,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "cost_usd": cost
-        }).execute()
-    
     try:
+        def insert_usage():
+            return client.table("token_usage").insert({
+                "user_id": user_id,
+                "model": model,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cost_usd": cost
+            }).execute()
+
         supabase_query(insert_usage)
     except Exception as e:
         print(f"[Token Manager] Failed to record usage: {e}")
-        # Don't fail the request if usage recording fails
-        return
+        # Continue to attempt total_spent update even if usage row failed
 
     # Update total spent
     try:

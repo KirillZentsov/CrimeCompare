@@ -21,6 +21,8 @@ def check_limit(user_id: str) -> bool:
 
     try:
         result = supabase_query(query)
+        if not result or not getattr(result, "data", None):
+            return False
         row = result.data
 
         if not row:
@@ -62,7 +64,10 @@ def increment_usage(user_id: str) -> None:
 
     try:
         result = supabase_query(get_current)
-        row = result.data
+        if not result or not getattr(result, "data", None):
+            row = None
+        else:
+            row = result.data
 
         if not row:
             # Create initial record

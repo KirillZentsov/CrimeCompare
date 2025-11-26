@@ -1,0 +1,646 @@
+/* ==================== GLOBAL STYLES ==================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #818cf8;
+    --secondary: #8b5cf6;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+}
+
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Container width optimization */
+.block-container {
+    max-width: 1100px !important;
+    margin: 0 auto;
+    padding-top: 1.25rem !important;
+    padding-bottom: 2rem !important;
+}
+
+/* Remove Streamlit branding */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* ==================== HEADER ==================== */
+.header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.header h1 {
+    position: relative;
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    letter-spacing: -0.02em;
+}
+
+.header .subtitle {
+    position: relative;
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 400;
+}
+
+/* ==================== HERO SECTION ==================== */
+.hero {
+    text-align: center;
+    margin-bottom: 1.75rem;
+    padding: 1.75rem;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-200);
+}
+
+.hero h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.hero p {
+    margin: 0;
+    color: var(--gray-600);
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+/* ==================== CARD STYLES ==================== */
+.card {
+    padding: 1.4rem;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-200);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+/* Input card specific */
+.input-card {
+    background: linear-gradient(135deg, #fdfcfb 0%, #f8f9fa 100%);
+}
+
+.input-card label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+/* Settings card */
+.settings-card {
+    background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+    border: 2px solid var(--primary-light);
+}
+
+.settings-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+/* ==================== INPUT FIELDS ==================== */
+.stTextInput > div > div > input {
+    border-radius: var(--radius) !important;
+    border: 2px solid var(--gray-300) !important;
+    padding: 0.75rem 1rem !important;
+    font-size: 1rem !important;
+    transition: all 0.2s ease !important;
+}
+
+.stTextInput > div > div > input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+.stSelectbox > div > div {
+    border-radius: var(--radius) !important;
+    border: 2px solid var(--gray-300) !important;
+}
+
+/* ==================== BUTTON STYLES ==================== */
+.stButton > button {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: var(--radius-lg);
+    border: none;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.stButton > button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s;
+}
+
+.stButton > button:hover::before {
+    left: 100%;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* ==================== DIVIDER ==================== */
+.divider {
+    margin: 3rem 0 2rem 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gray-300), transparent);
+}
+
+/* ==================== RESULTS TITLE ==================== */
+.results-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--gray-900);
+    text-align: center;
+    position: relative;
+    padding-bottom: 1rem;
+}
+
+.results-title::after {
+    display: none;
+}
+
+/* ==================== RESULT CARDS ==================== */
+.result-card {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.1rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+    border: 2px solid var(--gray-200);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.result-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+}
+
+.result-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-light);
+}
+
+.result-card h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.result-card p {
+    margin: 0;
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+/* ==================== CHART & TEXT AREAS ==================== */
+.chart-area,
+.text-summary {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: white;
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--gray-200);
+    box-shadow: var(--shadow);
+}
+
+.text-summary {
+    background: #f8fafc;
+    border-color: var(--gray-200);
+}
+
+.text-summary h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--gray-900);
+}
+
+.text-summary p {
+    line-height: 1.7;
+    color: var(--gray-700);
+    font-size: 1.05rem;
+}
+
+/* ==================== SKELETON LOADERS ==================== */
+.skeleton-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--gray-100);
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.skeleton-line {
+    height: 16px;
+    background: var(--gray-300);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton-line.short {
+    width: 60%;
+    margin: 0 auto 12px auto;
+}
+
+.skeleton-line.long {
+    width: 40%;
+    height: 40px;
+    margin: 0 auto;
+}
+
+/* Shimmer effect */
+.skeleton-line::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -150px;
+    height: 100%;
+    width: 150px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.8) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(400px); }
+}
+
+/* ==================== LOADING SPINNER ==================== */
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--gray-200);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==================== INFO MESSAGE ==================== */
+.stAlert {
+    border-radius: var(--radius-lg) !important;
+    border: none !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.legal-card {
+    background: #f8fafc;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    padding: 0.9rem 1.1rem;
+    box-shadow: var(--shadow);
+    color: var(--gray-800);
+    line-height: 1.4;
+}
+
+.legal-card h4 {
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+    color: var(--gray-900);
+}
+
+.legal-card a {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.legal-card small {
+    color: var(--gray-600);
+}
+
+.stRadio > label {
+    font-weight: 600;
+}
+
+.stRadio [role="radiogroup"] {
+    gap: 0.5rem !important;
+    justify-content: center;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    margin-bottom: 0.5rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 0.4rem 0.9rem;
+}
+
+.results-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    top: -6px;
+}
+
+.results-header .results-title {
+    margin: 0;
+}
+
+.info-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    color: var(--gray-700);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: help;
+    box-shadow: var(--shadow-sm);
+}
+
+.info-dot.subtle {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    color: var(--gray-700);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.stButton > button, .stForm button[type="submit"] {
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 0.75rem 2.4rem;
+    font-weight: 700;
+    box-shadow: var(--shadow);
+    width: 100%;
+}
+
+.stForm button[type="submit"] {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 0.85rem 2.6rem !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+    width: 100% !important;
+    display: block !important;
+    margin: 0 auto !important;
+    box-shadow: var(--shadow-lg) !important;
+}
+
+/* Force submit buttons (secondary kind) inside forms to match Run */
+.stForm button[kind="secondary"] {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 0.85rem 2.6rem !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+    width: 220px !important;
+    display: block !important;
+    margin: 0.5rem auto 0.25rem auto !important;
+    box-shadow: var(--shadow-lg) !important;
+}
+
+.metric-top {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--gray-900);
+    margin-bottom: 0.35rem;
+}
+
+.result-card.compact {
+    padding: 0.9rem 1rem;
+}
+
+.result-card.compact p {
+    font-size: 1.8rem;
+}
+
+
+.postcode-label {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--gray-900);
+    margin: 0.25rem 0 0.35rem 0;
+}
+.postcode-label.large {
+    font-size: 1.2rem;
+    margin: 0.1rem 0 0.4rem 0;
+}
+
+.result-card {
+    padding: 1rem 1.1rem;
+}
+
+.result-card p {
+    font-size: 2.1rem;
+}
+
+.info-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--gray-200);
+    color: var(--gray-700);
+    font-weight: 700;
+    margin-top: 0.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+@media (max-width: 768px) {
+    .header h1 {
+        font-size: 2rem;
+    }
+    
+    .hero h2 {
+        font-size: 1.4rem;
+    }
+    
+    .result-card p {
+        font-size: 2rem;
+    }
+    
+    .card {
+        padding: 1.25rem;
+    }
+}
+
+/* ==================== SMOOTH SCROLLING ==================== */
+html {
+    scroll-behavior: smooth;
+}
+
+/* ==================== BADGE STYLES ==================== */
+.badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-success {
+    background: var(--success);
+    color: white;
+}
+
+.badge-warning {
+    background: var(--warning);
+    color: white;
+}
+
+.badge-danger {
+    background: var(--danger);
+    color: white;
+}
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.slide-in {
+    animation: slideIn 0.4s ease-out;
+}
