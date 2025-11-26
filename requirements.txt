@@ -5,3 +5,4 @@ openai>=1.6.0
 requests
 pandas
 plotly
+aiohttp>=3.9.0
