@@ -1,271 +1,201 @@
+"""
+CrimeCompare - Modern Async Version
+Compare crime statistics between two postcodes with a refined UI
+"""
+
 import os
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-from datetime import date
-import math
+from datetime import date, datetime
+from typing import List
+import requests
 
 from config import settings
 from supabase_utils import init_supabase, get_supabase_client, supabase_available
 from fingerprint_utils import get_user_id
 from quota_manager import check_limit, increment_usage
 from feedback_manager import save_feedback
-from llm_utils import summarize_crime_comparison_llm
-from crime_api import fetch_crimes_polygon, summarize_crimes, get_top_crime_categories, format_category_name
 from token_manager import get_settings_row
+from crime_api_async import (
+    fetch_both_postcodes_async,
+    make_circle_polygon,
+    summarize_crimes,
+    format_category_name,
+    get_risk_level,
+    get_risk_badge_class,
+    run_async,
+    fetch_polygon_multiple_months_async,
+    fetch_polygon_monthly_data_async
+)
 
 # ======================== PAGE CONFIG ========================
 st.set_page_config(
-    page_title="CrimeCompare England | Crime Data Analysis",
-    page_icon="🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+    page_title="CrimeCompare",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ======================== CUSTOM CSS ========================
-st.markdown("""
-<style>
-    /* Main container width optimization */
-    .main .block-container {
-        max-width: 1400px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }
-    
-    /* Header styling */
-    .main-header {
-        text-align: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem 1rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        color: white;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    
-    .main-title {
-        font-size: 3rem;
-        font-weight: 700;
-        margin: 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .slogan {
-        font-size: 1.2rem;
-        margin-top: 0.5rem;
-        opacity: 0.95;
-        font-weight: 300;
-    }
-    
-    .description {
-        font-size: 0.95rem;
-        margin-top: 1rem;
-        line-height: 1.6;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-        opacity: 0.9;
-    }
-    
-    /* Postcode input cards */
-    .postcode-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border: 2px solid #e1e8ed;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        height: 100%;
-    }
-    
-    /* Comparison result cards */
-    .result-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid #667eea;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        margin-bottom: 1.5rem;
-    }
-    
-    /* Risk badge styling */
-    .risk-low {
-        background: #d4edda;
-        color: #155724;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: 600;
-        display: inline-block;
-    }
-    
-    .risk-medium {
-        background: #fff3cd;
-        color: #856404;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: 600;
-        display: inline-block;
-    }
-    
-    .risk-high {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: 600;
-        display: inline-block;
-    }
-    
-    /* Settings panel */
-    .settings-panel {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border: 1px solid #dee2e6;
-        margin-bottom: 2rem;
-    }
-    
-    /* Footer attribution */
-    .attribution {
-        background: #2c3e50;
-        color: #ecf0f1;
-        padding: 1.5rem;
-        border-radius: 8px;
-        margin-top: 3rem;
-        font-size: 0.85rem;
-        line-height: 1.6;
-    }
-    
-    .attribution a {
-        color: #3498db;
-        text-decoration: none;
-    }
-    
-    .attribution a:hover {
-        text-decoration: underline;
-    }
-    
-    /* Metric cards */
-    div[data-testid="stMetricValue"] {
-        font-size: 2rem;
-        font-weight: 700;
-    }
-    
-    /* Radio buttons spacing */
-    div[role="radiogroup"] {
-        gap: 1rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ======================== LOAD CSS ========================
+def load_css():
+    """Load custom CSS styles"""
+    css_path = "style.css"
+    if os.path.exists(css_path):
+        with open(css_path) as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ style.css not found. Using default styling.")
+
+load_css()
 
 # ======================== HELPER FUNCTIONS ========================
-def make_circle_polygon(lat, lng, radius_m, num_points=32):
-    """Create circular polygon coordinates for given center and radius."""
-    pts = []
-    R = 6371000  # Earth radius in meters
-    for i in range(num_points):
-        angle = 2 * math.pi * i / num_points
-        d_lat = (radius_m / R) * math.cos(angle)
-        d_lng = (radius_m / (R * math.cos(math.radians(lat)))) * math.sin(angle)
-        new_lat = lat + math.degrees(d_lat)
-        new_lng = lng + math.degrees(d_lng)
-        pts.append([new_lat, new_lng])
-    return pts
+def show_skeleton_card():
+    """Display loading skeleton card"""
+    st.markdown(
+        """
+        <div class="result-card skeleton-card">
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-line long"></div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-def get_risk_badge_html(risk_score):
-    """Generate HTML for risk level badge."""
-    if risk_score < 40:
-        cls = "risk-low"
-        label = "Low Risk"
-        emoji = "🟢"
-    elif risk_score < 70:
-        cls = "risk-medium"
-        label = "Medium Risk"
-        emoji = "🟡"
-    else:
-        cls = "risk-high"
-        label = "High Risk"
-        emoji = "🔴"
+def parse_radius_setting(radius_str: str) -> float:
+    """
+    Parse radius setting to meters.
     
-    return f'<span class="{cls}">{emoji} {label} ({risk_score})</span>'
+    Args:
+        radius_str: String like "5 minutes", "1 mile"
+        
+    Returns:
+        Distance in meters
+    """
+    if "minute" in radius_str:
+        minutes = int(radius_str.split()[0])
+        WALK_SPEED_M_PER_MIN = 80  # Average walking speed
+        return minutes * WALK_SPEED_M_PER_MIN
+    elif "mile" in radius_str:
+        miles = float(radius_str.split()[0])
+        return miles * 1609.34
+    else:
+        return 805  # Default: 0.5 miles
 
-# ======================== INITIALIZATION ========================
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_latest_month_from_api() -> str:
+    """Fetch the latest available crime data month from Police.uk."""
+    resp = requests.get("https://data.police.uk/api/crime-last-updated", timeout=10)
+    resp.raise_for_status()
+    payload = resp.json()
+    latest_date = payload.get("date")
+    if not latest_date:
+        raise ValueError("No date field returned from crime-last-updated endpoint")
+    dt = datetime.fromisoformat(latest_date)
+    return dt.strftime("%Y-%m")
+
+
+def get_latest_month_with_fallback() -> str:
+    """Get latest month, falling back to current month on error."""
+    try:
+        return fetch_latest_month_from_api()
+    except Exception as e:
+        st.warning(f"Using fallback month due to fetch error: {e}")
+        today = date.today()
+        return today.strftime("%Y-%m")
+
+
+def build_recent_months(latest_month: str, count: int = 3) -> List[str]:
+    """Return a list of recent months (YYYY-MM) ending at latest_month."""
+    dt = datetime.strptime(latest_month, "%Y-%m")
+    months: list[str] = []
+    for offset in range(count):
+        month = dt.month - offset
+        year = dt.year
+        while month <= 0:
+            month += 12
+            year -= 1
+        months.append(f"{year:04d}-{month:02d}")
+    return list(reversed(months))
+
+
+def format_month_label(ym: str) -> str:
+    """Convert YYYY-MM to 'Month YYYY'."""
+    try:
+        dt = datetime.strptime(ym, "%Y-%m")
+        return dt.strftime("%B %Y")
+    except Exception:
+        return ym
+
+
+def format_month_range(months: List[str]) -> str:
+    """Format list of months to readable range."""
+    if not months:
+        return ""
+    if len(months) == 1:
+        return format_month_label(months[0])
+    return f"{format_month_label(months[0])} to {format_month_label(months[-1])}"
+
+# ======================== SESSION STATE INITIALIZATION ========================
+if "loading" not in st.session_state:
+    st.session_state.loading = False
+
+if "results" not in st.session_state:
+    st.session_state.results = None
+
 if "supabase_initialized" not in st.session_state:
     init_supabase()
     st.session_state["supabase_initialized"] = True
 
+if "has_run" not in st.session_state:
+    st.session_state.has_run = False
+
+if "latest_month" not in st.session_state:
+    latest = get_latest_month_with_fallback()
+    st.session_state["latest_month"] = latest
+    st.session_state["quarter_months"] = build_recent_months(latest, 3)
+
+latest_month = st.session_state.get("latest_month", get_latest_month_with_fallback())
+quarter_months = st.session_state.get("quarter_months", build_recent_months(latest_month, 3))
+
+# ======================== CHECK DATABASE & SERVICE STATUS ========================
 if not supabase_available():
     st.error("⚠️ Database connection failed. Please check your configuration.")
     st.stop()
 
-# ======================== ADMIN MODE CHECK ========================
+# ======================== ADMIN MODE ========================
 query_params = st.query_params
 admin_key_env = os.getenv("ADMIN_KEY")
 is_admin = ("admin" in query_params and admin_key_env 
             and query_params["admin"] == admin_key_env)
 
 if is_admin:
-    st.title("🛠 Admin Panel - CrimeCompare England")
+    st.title("🛠 Admin Panel")
     
     try:
         settings_row = get_settings_row()
         
         col1, col2, col3 = st.columns(3)
-        col1.metric("Service Status", "⛔ Paused" if settings_row["service_paused"] else "✅ Active")
-        col2.metric("Monthly Budget", f"${settings_row['monthly_budget_limit']}")
-        col3.metric("Total Spent", f"${round(settings_row['total_spent'], 4)}")
+        col1.metric("Service", "⛔ Paused" if settings_row["service_paused"] else "✅ Active")
+        col2.metric("Budget", f"${settings_row['monthly_budget_limit']}")
+        col3.metric("Spent", f"${round(settings_row['total_spent'], 4)}")
         
         st.markdown("---")
         
-        col_a, col_b = st.columns(2)
-        
-        with col_a:
-            if st.button("🔄 Toggle Service Status", use_container_width=True):
-                supabase = get_supabase_client()
-                new_val = not settings_row["service_paused"]
-                supabase.table("settings").update({"service_paused": new_val}).eq("id", 1).execute()
-                st.success(f"Service {'paused' if new_val else 'resumed'}")
-                st.rerun()
-        
-        with col_b:
-            if st.button("💰 Reset Spending", use_container_width=True):
-                supabase = get_supabase_client()
-                supabase.table("settings").update({"total_spent": 0}).eq("id", 1).execute()
-                st.success("Total spending reset to $0")
-                st.rerun()
-        
-        st.markdown("---")
-        st.subheader("📊 Today's Usage")
-        
-        today = date.today().isoformat()
-        supabase = get_supabase_client()
-        ul = supabase.table("usage_limits").select("*").eq("date", today).execute()
-        
-        if ul.data:
-            df_ul = pd.DataFrame(ul.data)
-            st.dataframe(df_ul, use_container_width=True)
-        else:
-            st.info("No usage recorded today.")
+        if st.button("Toggle Service", width="stretch"):
+            supabase = get_supabase_client()
+            new_val = not settings_row["service_paused"]
+            supabase.table("settings").update({"service_paused": new_val}).eq("id", 1).execute()
+            st.success(f"Service {'paused' if new_val else 'resumed'}")
+            st.rerun()
             
     except Exception as e:
-        st.error(f"Admin panel error: {e}")
+        st.error(f"Admin error: {e}")
     
     st.stop()
 
-# ======================== MAIN APP ========================
-# Header
-st.markdown("""
-<div class="main-header">
-    <h1 class="main-title">🏴󠁧󠁢󠁥󠁮󠁧󠁿 CrimeCompare England</h1>
-    <p class="slogan">Crime data. Postcode clarity.</p>
-    <p class="description">
-        The system collects official police data, breaks it down by crime type and frequency, 
-        and presents clear comparisons to help you understand the safety profile of any area.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# User ID and checks
+# ======================== USER CHECKS ========================
 user_id = get_user_id()
 
 try:
@@ -275,119 +205,81 @@ except Exception as e:
     st.stop()
 
 if settings_row["service_paused"]:
-    st.error("⛔ Service is temporarily paused for maintenance. Please try again later.")
+    st.error("⛔ Service temporarily paused for maintenance.")
     st.stop()
 
 try:
     if check_limit(user_id):
-        st.warning("⏳ You've reached your daily limit. Please try again tomorrow.")
+        st.warning("⏳ Daily limit reached. Try again tomorrow.")
         st.stop()
 except Exception as e:
     st.error(f"Failed to check quota: {e}")
     st.stop()
 
-# ======================== INPUT SECTION ========================
-st.markdown("## 📍 Enter Two Postcodes")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown('<div class="postcode-card">', unsafe_allow_html=True)
-    st.markdown("### 📮 Postcode A")
-    postcode_a = st.text_input(
-        "Enter first postcode",
-        placeholder="e.g., SW1A 1AA",
-        key="postcode_a",
-        label_visibility="collapsed"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col2:
-    st.markdown('<div class="postcode-card">', unsafe_allow_html=True)
-    st.markdown("### 📮 Postcode B")
-    postcode_b = st.text_input(
-        "Enter second postcode",
-        placeholder="e.g., E1 6AN",
-        key="postcode_b",
-        label_visibility="collapsed"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ======================== SETTINGS SECTION ========================
-st.markdown('<div class="settings-panel">', unsafe_allow_html=True)
-st.markdown("## ⚙️ Comparison Settings")
-
-# Month Selection
-available_months = [
-    "2025-01", "2025-02", "2025-03", "2025-04", "2025-05",
-    "2025-06", "2025-07", "2025-08", "2025-09"
-]
-
-col_m1, col_m2 = st.columns([3, 1])
-
-with col_m1:
-    selected_month = st.selectbox(
-        "📅 Select month for crime comparison",
-        available_months,
-        index=0
-    )
-
-with col_m2:
-    st.markdown(
-        """
-        <div style="
-            background:#e8f4f8;
-            padding:12px;
-            margin-top:28px;
-            border-radius:8px;
-            text-align:center;
-            border:2px solid #b8dce8;
-        ">
-            <small>Latest available</small><br>
-            <strong style="font-size:1.1rem;">2025-09</strong>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-st.markdown("---")
-
-# Area Selection
-st.markdown("### 🗺️ Area Selection Method")
-
-mode = st.radio(
-    "Choose how to define the search area:",
-    options=["By radius", "By walking time"],
-    horizontal=True,
-    help="Radius uses direct distance, walking time estimates distance covered at normal walking pace"
+# ======================== HEADER ========================
+st.markdown(
+    """
+    <div class="header">
+        <h1>🔍 CrimeCompare</h1>
+        <div class="subtitle">Crime data. Postcode clarity.</div>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
-distance_meters = None
+# ======================== HERO SECTION ========================
+st.markdown(
+    """
+    <div class="hero fade-in">
+        <h2>Compare crime levels between two England areas</h2>
+        <p>Enter two postcodes, set your search area, and see clear comparisons.</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-if mode == "By radius":
-    radius_miles = st.radio(
-        "Search radius:",
-        options=[0.5, 1.0],
-        format_func=lambda x: f"{x} mile" if x == 1.0 else f"{x} miles",
-        horizontal=True
+# ======================== INPUT SECTION ========================
+colA, colB, colRadius = st.columns([3, 3, 2], gap="large")
+
+with colA:
+    postcode_a = st.text_input(
+        "📍 Postcode A", 
+        placeholder="e.g. SW1A 1AA",
+        help="Enter first postcode"
     )
-    distance_meters = radius_miles * 1609.34
-    st.info(f"🔍 Effective search radius: **{int(distance_meters)} meters** ({radius_miles} mile{'s' if radius_miles != 1 else ''})")
-else:
-    walking_minutes = st.radio(
-        "Walking time:",
-        options=[5, 10],
-        format_func=lambda x: f"{x} minutes",
-        horizontal=True
+
+with colB:
+    postcode_b = st.text_input(
+        "📍 Postcode B", 
+        placeholder="e.g. E1 6AN",
+        help="Enter second postcode"
     )
-    WALK_SPEED_M_PER_MIN = 80  # Average adult walking speed
-    distance_meters = walking_minutes * WALK_SPEED_M_PER_MIN
-    st.info(f"🚶 Estimated walking radius: **{int(distance_meters)} meters** ({walking_minutes} minute walk)")
 
-st.markdown('</div>', unsafe_allow_html=True)
+with colRadius:
+    radius = st.selectbox(
+        "Search area",
+        ["5 minutes", "10 minutes", "15 minutes", "0.5 miles", "1 mile", "2 miles"],
+        index=1,
+        help="Walking time or direct radius"
+    )
 
-# ======================== COMPARE BUTTON ========================
-if st.button("🔍 Compare Crime Data", type="primary", use_container_width=True):
+st.markdown(
+    f"""
+    <div style="text-align:center; margin-top:-0.5rem; margin-bottom:0.5rem;">
+        <strong>Latest data month:</strong> {format_month_label(latest_month)} &nbsp;|&nbsp; <strong>Quarter window:</strong> {format_month_range(quarter_months)}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ======================== RUN BUTTON ========================
+run_cols = st.columns([3, 2, 3])
+with run_cols[1]:
+    run_clicked = st.button("Run", type="primary", width="stretch")
+
+# ======================== HANDLE RUN CLICK ========================
+if run_clicked:
+    st.session_state.has_run = True
     # Validate inputs
     if not postcode_a or not postcode_b:
         st.error("❌ Please enter both postcodes")
@@ -400,205 +292,414 @@ if st.button("🔍 Compare Crime Data", type="primary", use_container_width=True
         st.error("❌ Please enter two different postcodes")
         st.stop()
     
-    # Increment usage
-    try:
-        increment_usage(user_id)
-    except Exception as e:
-        st.warning(f"Could not update usage counter: {e}")
-    
-    # Fetch data for both postcodes
-    supabase = get_supabase_client()
-    results = []
-    
-    with st.spinner("🔄 Fetching crime data..."):
-        for pc in [postcode_a, postcode_b]:
-            try:
-                # Get postcode coordinates
-                res = supabase.table("postcodes").select("*").eq("postcode", pc).maybe_single().execute()
-                row = res.data
-                
-                if not row:
-                    results.append({"postcode": pc, "error": "Postcode not found in database"})
-                    continue
-                
-                lat, lng = row["lat"], row["lng"]
-                
-                # Create polygon
-                polygon = make_circle_polygon(lat, lng, distance_meters)
-                
-                # Fetch crimes
-                events = fetch_crimes_polygon(polygon, selected_month)
-                summary = summarize_crimes(events)
-                
-                results.append({
-                    "postcode": pc,
-                    "lat": lat,
-                    "lng": lng,
-                    "total_crimes": summary["total_crimes"],
-                    "risk_score": summary["risk_score"],
-                    "by_category": summary["by_category"],
-                    "events": events
-                })
-                
-            except Exception as e:
-                results.append({"postcode": pc, "error": str(e)})
-    
+    # Reset results and trigger loading
+    st.session_state.results = None
+    st.session_state.loading = True
+    st.rerun()
+
+# ======================== RESULTS SECTION ========================
+if st.session_state.has_run:
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+    # ======================== LOADING STATE ========================
+    if st.session_state.loading and st.session_state.results is None:
+        # Show skeleton loaders
+        col1, col2, col3, col4 = st.columns(4, gap="medium")
+        with col1:
+            show_skeleton_card()
+        with col2:
+            show_skeleton_card()
+        with col3:
+            show_skeleton_card()
+        with col4:
+            show_skeleton_card()
+
+        try:
+            increment_usage(user_id)
+            supabase = get_supabase_client()
+            res_a = supabase.table("postcodes").select("*").eq("postcode", postcode_a).maybe_single().execute()
+            res_b = supabase.table("postcodes").select("*").eq("postcode", postcode_b).maybe_single().execute()
+            if not res_a.data:
+                st.session_state.results = {"error": f"Postcode {postcode_a} not found"}
+                st.session_state.loading = False
+                st.rerun()
+            if not res_b.data:
+                st.session_state.results = {"error": f"Postcode {postcode_b} not found"}
+                st.session_state.loading = False
+                st.rerun()
+
+            lat_a, lng_a = res_a.data["lat"], res_a.data["lng"]
+            lat_b, lng_b = res_b.data["lat"], res_b.data["lng"]
+            radius_meters = parse_radius_setting(radius)
+            polygon_a = make_circle_polygon(lat_a, lng_a, radius_meters)
+            polygon_b = make_circle_polygon(lat_b, lng_b, radius_meters)
+
+            events_a, events_b = run_async(
+                fetch_both_postcodes_async(
+                    {"postcode": postcode_a, "lat": lat_a, "lng": lng_a},
+                    {"postcode": postcode_b, "lat": lat_b, "lng": lng_b},
+                    polygon_a,
+                    polygon_b,
+                    latest_month
+                )
+            )
+
+            quarter_events_a = run_async(fetch_polygon_multiple_months_async(polygon_a, quarter_months))
+            quarter_events_b = run_async(fetch_polygon_multiple_months_async(polygon_b, quarter_months))
+            monthly_events_a = run_async(fetch_polygon_monthly_data_async(polygon_a, quarter_months))
+            monthly_events_b = run_async(fetch_polygon_monthly_data_async(polygon_b, quarter_months))
+
+            summary_a = summarize_crimes(events_a)
+            summary_b = summarize_crimes(events_b)
+            quarter_summary_a = summarize_crimes(quarter_events_a)
+            quarter_summary_b = summarize_crimes(quarter_events_b)
+            monthly_summaries_a = {m: summarize_crimes(ev) for m, ev in monthly_events_a.items()}
+            monthly_summaries_b = {m: summarize_crimes(ev) for m, ev in monthly_events_b.items()}
+
+            st.session_state.results = {
+                "postcode_a": postcode_a,
+                "postcode_b": postcode_b,
+                "a": {
+                    "total": summary_a["total_crimes"],
+                    "violent": summary_a["by_category"].get("violence-and-sexual-offences", 0),
+                    "burglary": summary_a["by_category"].get("burglary", 0),
+                    "risk_score": summary_a["risk_score"],
+                    "risk_level": get_risk_level(summary_a["risk_score"]),
+                    "by_category": summary_a["by_category"]
+                },
+                "b": {
+                    "total": summary_b["total_crimes"],
+                    "violent": summary_b["by_category"].get("violence-and-sexual-offences", 0),
+                    "burglary": summary_b["by_category"].get("burglary", 0),
+                    "risk_score": summary_b["risk_score"],
+                    "risk_level": get_risk_level(summary_b["risk_score"]),
+                    "by_category": summary_b["by_category"]
+                },
+                "quarter": {
+                    "months": quarter_months,
+                    "a": {
+                        "total": quarter_summary_a["total_crimes"],
+                        "violent": quarter_summary_a["by_category"].get("violence-and-sexual-offences", 0),
+                        "burglary": quarter_summary_a["by_category"].get("burglary", 0),
+                        "risk_score": quarter_summary_a["risk_score"],
+                        "risk_level": get_risk_level(quarter_summary_a["risk_score"]),
+                        "by_category": quarter_summary_a["by_category"]
+                    },
+                    "b": {
+                        "total": quarter_summary_b["total_crimes"],
+                        "violent": quarter_summary_b["by_category"].get("violence-and-sexual-offences", 0),
+                        "burglary": quarter_summary_b["by_category"].get("burglary", 0),
+                        "risk_score": quarter_summary_b["risk_score"],
+                        "risk_level": get_risk_level(quarter_summary_b["risk_score"]),
+                        "by_category": quarter_summary_b["by_category"]
+                    }
+                },
+                "month": latest_month,
+                "radius": radius,
+                "monthly": {
+                    "months": quarter_months,
+                    "a": monthly_summaries_a,
+                    "b": monthly_summaries_b
+                }
+            }
+
+        except Exception as e:
+            st.session_state.results = {"error": str(e)}
+
+        st.session_state.loading = False
+        st.rerun()
+
     # ======================== DISPLAY RESULTS ========================
-    st.markdown("---")
-    st.markdown("## 📊 Comparison Results")
-    
-    # Check for errors
-    has_error = any("error" in r for r in results)
-    if has_error:
-        for r in results:
-            if "error" in r:
-                st.error(f"**{r['postcode']}**: {r['error']}")
-        st.stop()
-    
-    # Display overview cards
-    col1, col2 = st.columns(2)
-    
-    for idx, r in enumerate(results):
-        with [col1, col2][idx]:
-            st.markdown(f"""
-            <div class="result-card">
-                <h2 style="margin:0; color:#667eea;">📮 {r['postcode']}</h2>
-                <p style="color:#666; font-size:0.9rem; margin:0.5rem 0;">
-                    {r['lat']:.4f}, {r['lng']:.4f}
+    elif st.session_state.results is not None:
+        data = st.session_state.results
+        if "error" in data:
+            st.error(f"Error: {data['error']}")
+            st.stop()
+
+        info_content = "\n".join([
+            "- Total crimes: count of all reported incidents inside the chosen radius and time window.",
+            "- Risk score: sum of (count x severity weight) per category, normalized to 0-100.",
+            "- Higher severity (e.g. violence/sexual offences) contributes more to the score."
+        ])
+        info_title = info_content.replace("\n", "&#10;")
+        st.markdown(
+            f"""
+            <div class="results-header">
+                <h4 class="results-title">Results</h4>
+                <span class="info-dot subtle" title="{info_title}">?</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        tab_month, tab_quarter = st.tabs(["By Months", "Last Quarter"])
+
+        with tab_month:
+            month_options = data.get("monthly", {}).get("months", [data["month"]])
+            default_month = month_options.index(data["month"]) if data["month"] in month_options else len(month_options) - 1
+            month_cols = st.columns([1, 6, 1])
+            selected_month = data["month"]
+            with month_cols[1]:
+                selected_month = st.selectbox(
+                    "Month",
+                    month_options,
+                    index=default_month,
+                    key="month_select",
+                    format_func=format_month_label
+                )
+            m_a = data.get("monthly", {}).get("a", {}).get(selected_month, {"total_crimes": 0, "risk_score": 0, "by_category": {}})
+            m_b = data.get("monthly", {}).get("b", {}).get(selected_month, {"total_crimes": 0, "risk_score": 0, "by_category": {}})
+
+            label_cols = st.columns(2)
+            label_cols[0].markdown(f"<div class='postcode-label large'>{data['postcode_a']}</div>", unsafe_allow_html=True)
+            label_cols[1].markdown(f"<div class='postcode-label large'>{data['postcode_b']}</div>", unsafe_allow_html=True)
+            col_left, col_right = st.columns(2, gap="medium")
+            with col_left:
+                for title, value in [("Total Crimes", m_a.get("total_crimes", 0)), ("Risk Score", m_a.get("risk_score", 0))]:
+                    st.markdown(
+                        f"""
+                        <div class="result-card compact fade-in">
+                            <h4>{title}</h4>
+                            <p>{value}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            with col_right:
+                for title, value in [("Total Crimes", m_b.get("total_crimes", 0)), ("Risk Score", m_b.get("risk_score", 0))]:
+                    st.markdown(
+                        f"""
+                        <div class="result-card compact fade-in">
+                            <h4>{title}</h4>
+                            <p>{value}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            st.markdown("<div style='margin-top: 1.0rem;'></div>", unsafe_allow_html=True)
+            all_categories = set(m_a.get('by_category', {}).keys()) | set(m_b.get('by_category', {}).keys())
+            category_data = []
+            for cat in all_categories:
+                category_data.append({
+                    'Category': format_category_name(cat),
+                    data['postcode_a']: m_a.get('by_category', {}).get(cat, 0),
+                    data['postcode_b']: m_b.get('by_category', {}).get(cat, 0)
+                })
+            if category_data:
+                df_cat = pd.DataFrame(category_data).sort_values(by=data['postcode_a'], ascending=False)
+            else:
+                df_cat = pd.DataFrame({'Category': [], data['postcode_a']: [], data['postcode_b']: []})
+            fig_cat = go.Figure()
+            fig_cat.add_trace(go.Bar(
+                name=data['postcode_a'],
+                x=df_cat['Category'],
+                y=df_cat.get(data['postcode_a'], []),
+                marker_color='#2d6a4f',
+                hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+            ))
+            fig_cat.add_trace(go.Bar(
+                name=data['postcode_b'],
+                x=df_cat['Category'],
+                y=df_cat.get(data['postcode_b'], []),
+                marker_color='#ff7043',
+                hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+            ))
+            fig_cat.update_layout(
+                title="Crime Types Side-by-Side",
+                xaxis_title="",
+                yaxis_title="Incidents",
+                barmode='group',
+                height=420,
+                xaxis_tickangle=-45,
+                paper_bgcolor='white',
+                plot_bgcolor='#fafafa',
+                font=dict(family='Inter, sans-serif', size=12)
+            )
+            st.plotly_chart(fig_cat, width="stretch", key="category_chart")
+
+            trend_categories = set()
+            for month_key, summary in data.get('monthly', {}).get('a', {}).items():
+                trend_categories.update(summary.get('by_category', {}).keys())
+            for month_key, summary in data.get('monthly', {}).get('b', {}).items():
+                trend_categories.update(summary.get('by_category', {}).keys())
+            trend_options = ["All categories"] + sorted(trend_categories)
+            trend_labels = {opt: ("All categories" if opt == "All categories" else format_category_name(opt)) for opt in trend_options}
+            trend_cols = st.columns([1, 6, 1])
+            with trend_cols[1]:
+                selected_trend = st.selectbox(
+                    "Trend by category (last 3 months)",
+                    trend_options,
+                    format_func=lambda x: trend_labels[x],
+                    index=0,
+                )
+            trend_rows = []
+            for month_key in data.get('monthly', {}).get('months', []):
+                summary_a = data['monthly']['a'].get(month_key, {})
+                summary_b = data['monthly']['b'].get(month_key, {})
+                if selected_trend == "All categories":
+                    count_a = summary_a.get('total_crimes', 0)
+                    count_b = summary_b.get('total_crimes', 0)
+                else:
+                    count_a = summary_a.get('by_category', {}).get(selected_trend, 0)
+                    count_b = summary_b.get('by_category', {}).get(selected_trend, 0)
+                trend_rows.append({"Month": format_month_label(month_key), "Postcode": data['postcode_a'], "Count": count_a})
+                trend_rows.append({"Month": format_month_label(month_key), "Postcode": data['postcode_b'], "Count": count_b})
+            trend_df = pd.DataFrame(trend_rows)
+            fig_trend = go.Figure()
+            fig_trend.add_trace(go.Scatter(
+                x=trend_df[trend_df['Postcode'] == data['postcode_a']]['Month'],
+                y=trend_df[trend_df['Postcode'] == data['postcode_a']]['Count'],
+                mode='lines+markers',
+                name=data['postcode_a'],
+                line=dict(color='#2d6a4f', width=3),
+                marker=dict(size=8)
+            ))
+            fig_trend.add_trace(go.Scatter(
+                x=trend_df[trend_df['Postcode'] == data['postcode_b']]['Month'],
+                y=trend_df[trend_df['Postcode'] == data['postcode_b']]['Count'],
+                mode='lines+markers',
+                name=data['postcode_b'],
+                line=dict(color='#ff7043', width=3),
+                marker=dict(size=8)
+            ))
+            fig_trend.update_layout(
+                title=f"{trend_labels.get(selected_trend)}",
+                xaxis_title="",
+                yaxis_title="Incidents",
+                height=420,
+                paper_bgcolor='white',
+                plot_bgcolor='#fafafa',
+                font=dict(family='Inter, sans-serif', size=12)
+            )
+            fig_trend.update_xaxes(
+                type="category",
+                categoryorder="array",
+                categoryarray=[format_month_label(m) for m in data.get('monthly', {}).get('months', [])],
+                tickvals=[format_month_label(m) for m in data.get('monthly', {}).get('months', [])],
+                ticktext=[format_month_label(m) for m in data.get('monthly', {}).get('months', [])]
+            )
+            st.plotly_chart(fig_trend, width="stretch", key="trend_chart")
+
+        with tab_quarter:
+            st.caption(f"Search area: {data['radius']}")
+            range_label = format_month_range(data['quarter']['months'])
+            st.caption(f"Covering {range_label}")
+            fig_q_total = go.Figure(data=[
+                go.Bar(
+                    x=[data['postcode_a'], data['postcode_b']],
+                    y=[data['quarter']['a']['total'], data['quarter']['b']['total']],
+                    marker_color=['#006d77', '#ffb703'],
+                    text=[data['quarter']['a']['total'], data['quarter']['b']['total']],
+                    textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>Quarter total crimes: %{y}<extra></extra>'
+                )
+            ])
+            fig_q_total.update_layout(
+                title="Total Crimes",
+                xaxis_title="",
+                yaxis_title="Incidents",
+                height=420,
+                showlegend=False,
+                paper_bgcolor='white',
+                plot_bgcolor='#fafafa',
+                font=dict(family='Inter, sans-serif', size=12)
+            )
+            st.plotly_chart(fig_q_total, width="stretch", key="quarter_total_chart")
+
+            quarter_categories = set(data['quarter']['a']['by_category'].keys()) | set(data['quarter']['b']['by_category'].keys())
+            quarter_category_data = []
+            for cat in quarter_categories:
+                quarter_category_data.append({
+                    'Category': format_category_name(cat),
+                    data['postcode_a']: data['quarter']['a']['by_category'].get(cat, 0),
+                    data['postcode_b']: data['quarter']['b']['by_category'].get(cat, 0)
+                })
+            if quarter_category_data:
+                df_q_cat = pd.DataFrame(quarter_category_data).sort_values(by=data['postcode_a'], ascending=False)
+            else:
+                df_q_cat = pd.DataFrame({'Category': [], data['postcode_a']: [], data['postcode_b']: []})
+            fig_q_cat = go.Figure()
+            fig_q_cat.add_trace(go.Bar(
+                name=data['postcode_a'],
+                x=df_q_cat['Category'],
+                y=df_q_cat[data['postcode_a']],
+                marker_color='#118ab2',
+                hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+            ))
+            fig_q_cat.add_trace(go.Bar(
+                name=data['postcode_b'],
+                x=df_q_cat['Category'],
+                y=df_q_cat[data['postcode_b']],
+                marker_color='#ef476f',
+                hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'
+            ))
+            fig_q_cat.update_layout(
+                title="Crime Types Side-by-Side",
+                xaxis_title="",
+                yaxis_title="Incidents",
+                barmode='group',
+                height=460,
+                xaxis_tickangle=-45,
+                paper_bgcolor='white',
+                plot_bgcolor='#fafafa',
+                font=dict(family='Inter, sans-serif', size=12)
+            )
+            st.plotly_chart(fig_q_cat, width="stretch", key="quarter_category_chart")
+    st.markdown(
+        f"""
+        <div class="text-summary fade-in">
+            <h4>Summary</h4>
+            <p>
+                <strong>{data['postcode_a']}</strong> recorded <strong>{data['a']['total']} total crimes</strong> 
+                in {format_month_label(selected_month)} with a risk score of <strong>{data['a']['risk_score']}</strong> 
+                (<span class="badge {get_risk_badge_class(data['a']['risk_score'])}">{data['a']['risk_level']} Risk</span>).
+                <br><br>
+                <strong>{data['postcode_b']}</strong> recorded <strong>{data['b']['total']} total crimes</strong> 
+                with a risk score of <strong>{data['b']['risk_score']}</strong> 
+                (<span class="badge {get_risk_badge_class(data['b']['risk_score'])}">{data['b']['risk_level']} Risk</span>).
+                <br><br>
+                Violence-related incidents: <strong>{data['a']['violent']}</strong> vs <strong>{data['b']['violent']}</strong>.<br>
+                Burglary incidents: <strong>{data['a']['burglary']}</strong> vs <strong>{data['b']['burglary']}</strong>.
+                <br><br>
+                Last quarter totals: <strong>{data['quarter']['a']['total']}</strong> vs <strong>{data['quarter']['b']['total']}</strong> 
+                across {format_month_range(data['quarter']['months'])}.
+                    <br><br>
+                    <em>Data reflects crime within a {data['radius']} area around each postcode.</em>
                 </p>
             </div>
-            """, unsafe_allow_html=True)
-            
-            st.metric("Total Crimes", r['total_crimes'])
-            st.markdown(get_risk_badge_html(r['risk_score']), unsafe_allow_html=True)
-            
-            if r['by_category']:
-                with st.expander("📋 Crime Breakdown"):
-                    for cat, count in sorted(r['by_category'].items(), key=lambda x: x[1], reverse=True):
-                        st.write(f"**{format_category_name(cat)}**: {count}")
-    
-    # ======================== COMPARISON CHARTS ========================
-    st.markdown("---")
-    st.markdown("## 📈 Visual Comparison")
-    
-    # Total crimes comparison
-    df_total = pd.DataFrame(results)
-    
-    fig_total = go.Figure(data=[
-        go.Bar(
-            x=df_total['postcode'],
-            y=df_total['total_crimes'],
-            marker_color=['#667eea', '#764ba2'],
-            text=df_total['total_crimes'],
-            textposition='auto',
+            """,
+            unsafe_allow_html=True
         )
-    ])
-    
-    fig_total.update_layout(
-        title="Total Crimes Comparison",
-        xaxis_title="Postcode",
-        yaxis_title="Number of Crimes",
-        height=400,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig_total, use_container_width=True)
-    
-    # Risk score comparison
-    fig_risk = go.Figure(data=[
-        go.Bar(
-            x=df_total['postcode'],
-            y=df_total['risk_score'],
-            marker_color=['#3498db', '#e74c3c'],
-            text=df_total['risk_score'].round(1),
-            textposition='auto',
-        )
-    ])
-    
-    fig_risk.update_layout(
-        title="Risk Score Comparison (0-100)",
-        xaxis_title="Postcode",
-        yaxis_title="Risk Score",
-        height=400,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig_risk, use_container_width=True)
-    
-    # Category comparison
-    st.markdown("### 🏷️ Crime Categories Comparison")
-    
-    # Combine all categories
-    all_categories = set()
-    for r in results:
-        all_categories.update(r['by_category'].keys())
-    
-    category_data = []
-    for cat in all_categories:
-        category_data.append({
-            'Category': format_category_name(cat),
-            postcode_a: results[0]['by_category'].get(cat, 0),
-            postcode_b: results[1]['by_category'].get(cat, 0)
-        })
-    
-    df_cat = pd.DataFrame(category_data).sort_values(by=postcode_a, ascending=False)
-    
-    fig_cat = go.Figure()
-    
-    fig_cat.add_trace(go.Bar(
-        name=postcode_a,
-        x=df_cat['Category'],
-        y=df_cat[postcode_a],
-        marker_color='#667eea'
-    ))
-    
-    fig_cat.add_trace(go.Bar(
-        name=postcode_b,
-        x=df_cat['Category'],
-        y=df_cat[postcode_b],
-        marker_color='#764ba2'
-    ))
-    
-    fig_cat.update_layout(
-        title="Crime Types Side-by-Side",
-        xaxis_title="Crime Category",
-        yaxis_title="Number of Incidents",
-        barmode='group',
-        height=500,
-        xaxis_tickangle=-45
-    )
-    
-    st.plotly_chart(fig_cat, use_container_width=True)
-    
-    # ======================== AI SUMMARY ========================
-    st.markdown("---")
-    st.markdown("## 🤖 AI Analysis")
-    
-    with st.spinner("✨ Generating intelligent summary..."):
-        try:
-            ai_summary = summarize_crime_comparison_llm(user_id, results, selected_month)
-            st.info(ai_summary)
-        except Exception as e:
-            st.error(f"Failed to generate AI summary: {e}")
 
 # ======================== FEEDBACK SECTION ========================
 st.markdown("---")
-st.markdown("## 💬 Your Feedback Matters")
+st.markdown("### 💬 Feedback")
 
 with st.form("feedback_form"):
-    col_f1, col_f2 = st.columns([1, 2])
-    
-    with col_f1:
-        rating = st.slider("Rating", 1, 5, 4, help="1 = Poor, 5 = Excellent")
-    
-    with col_f2:
+    top_cols = st.columns([1.5, 4])
+    with top_cols[0]:
+        rating_choice = st.radio(
+            "Was this helpful?",
+            ["👍", "👎"],
+            horizontal=True,
+            index=0,
+            help="Quick thumbs feedback"
+        )
+        rating = 5 if "👍" in rating_choice else 1
+    with top_cols[1]:
         feedback_text = st.text_area(
-            "Comments (optional)",
-            placeholder="Share your thoughts on CrimeCompare England...",
-            height=100
+            "Comments",
+            placeholder="Share your thoughts...",
+            height=80,
+            max_chars=200,
+            help="Up to 200 characters",
+            label_visibility="collapsed"
         )
     
-    submitted = st.form_submit_button("📤 Submit Feedback", use_container_width=True)
+    btn_cols = st.columns([3, 2, 3])
+    with btn_cols[1]:
+        submitted = st.form_submit_button("Submit", width="stretch")
     
     if submitted:
         try:
@@ -607,26 +708,23 @@ with st.form("feedback_form"):
         except Exception as e:
             st.error(f"Failed to save feedback: {e}")
 
-# ======================== ATTRIBUTION FOOTER ========================
-st.markdown(f"""
-<div class="attribution">
-    <strong>📜 Legal & Data Attribution</strong><br><br>
-    
-    This service contains public sector information licensed under the 
-    <a href="http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank">
-    Open Government Licence v3.0</a>.<br><br>
-    
-    <strong>Data Sources:</strong><br>
-    • Crime Data: <a href="https://data.police.uk/" target="_blank">Police.uk API</a> 
-    (Official UK Police crime statistics)<br>
-    • Postcode Data: <a href="https://geoportal.statistics.gov.uk/" target="_blank">
-    ONS Postcode Directory</a> (Office for National Statistics)<br><br>
-    
-    <strong>Disclaimer:</strong> Crime data is provided for informational purposes only. 
-    Past crime statistics do not guarantee future safety. Always conduct thorough research 
-    and consult local authorities when making important decisions about location and safety.<br><br>
-    
-    <small>CrimeCompare England © 2025 | User ID: <code>{user_id[:12]}...</code></small>
-</div>
-""", unsafe_allow_html=True)
-
+# ======================== FOOTER ========================
+st.markdown(
+    f"""
+    <div class="legal-card" style="margin-top: 1.5rem;">
+        <h4>📜 Legal & Attribution</h4>
+        <p>
+            Contains public sector information licensed under the 
+            <a href="http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" 
+            target="_blank">Open Government Licence v3.0</a>.
+            <br><br>
+            <strong>Data Sources:</strong> 
+            <a href="https://data.police.uk/" target="_blank">Police.uk API</a> | 
+            <a href="https://geoportal.statistics.gov.uk/" target="_blank">ONS Postcode Directory</a>
+            <br><br>
+            <small>CrimeCompare &copy; 2025</small>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
