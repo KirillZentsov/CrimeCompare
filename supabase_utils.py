@@ -40,14 +40,14 @@ def supabase_available() -> bool:
     return _supabase_available and _supabase_client is not None
 
 
-def supabase_query(fn: Callable[[], T], retries: int = 3, delay: float = 0.5) -> T:
+def supabase_query(fn: Callable[[], T], retries: int = 3, delay: float = 1.0) -> T:
     """
-    Execute a Supabase query with retry logic.
+    Execute a Supabase query with retry logic and exponential backoff.
     
     Args:
         fn: A callable that performs the Supabase query
-        retries: Number of retry attempts
-        delay: Delay between retries in seconds
+        retries: Number of retry attempts (default: 3)
+        delay: Initial delay between retries in seconds (default: 1.0)
     
     Returns:
         The result of the query
@@ -70,9 +70,17 @@ def supabase_query(fn: Callable[[], T], retries: int = 3, delay: float = 0.5) ->
             return result
         except Exception as e:
             last_error = e
-            print(f"[Supabase] Query failed (attempt {attempt + 1}/{retries}): {e}")
-            if attempt < retries - 1:
-                time.sleep(delay)
+            error_str = str(e).lower()
+            
+            # Для timeout увеличиваем задержку экспоненциально
+            if 'timeout' in error_str or 'statement timeout' in error_str:
+                wait_time = delay * (2 ** attempt)  # Экспоненциальная задержка
+                print(f"[Supabase] Timeout on attempt {attempt + 1}/{retries}, waiting {wait_time:.1f}s")
+                time.sleep(wait_time)
+            else:
+                print(f"[Supabase] Query failed (attempt {attempt + 1}/{retries}): {e}")
+                if attempt < retries - 1:
+                    time.sleep(delay)
 
     # All retries failed
     _supabase_available = False

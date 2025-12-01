@@ -1,4 +1,5 @@
 streamlit
+streamlit-searchbox
 python-dotenv
 supabase
 openai>=1.6.0
