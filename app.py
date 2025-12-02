@@ -11,6 +11,8 @@ from datetime import date, datetime
 from typing import List
 import requests
 from streamlit_searchbox import st_searchbox
+import folium
+from streamlit_folium import st_folium
 
 from config import settings
 from supabase_utils import init_supabase, supabase_available
@@ -31,7 +33,7 @@ from postcode_autocomplete import (
 
 # ======================== PAGE CONFIG ========================
 st.set_page_config(
-    page_title="CrimeCompare", page_icon="🔍",
+    page_title="CrimeCompare", page_icon="🛡️",
     layout="wide", initial_sidebar_state="collapsed"
 )
 
@@ -110,6 +112,79 @@ def format_month_range(months: List[str]) -> str:
         return format_month_label(months[0])
     return f"{format_month_label(months[0])} to {format_month_label(months[-1])}"
 
+def create_comparison_map(lat_a: float, lng_a: float, lat_b: float, lng_b: float, 
+                          postcode_a: str, postcode_b: str, radius_meters: float) -> folium.Map:
+    """Create an interactive map showing both postcodes with their search radii"""
+    # Calculate center point between the two locations
+    center_lat = (lat_a + lat_b) / 2
+    center_lng = (lng_a + lng_b) / 2
+    
+    # England approximate bounds
+    england_bounds = [[49.9, -6.4], [55.8, 1.8]]
+    
+    # Create base map with a clean style
+    m = folium.Map(
+        location=[center_lat, center_lng],
+        zoom_start=13,
+        tiles='cartodbpositron',
+        control_scale=True,
+        min_zoom=6,
+        max_zoom=18,
+        max_bounds=True
+    )
+    
+    # Set bounds to England
+    m.fit_bounds(england_bounds)
+    
+    # Colors matching our theme
+    color_a = '#0d9488'  # Teal
+    color_b = '#f97316'  # Orange
+    
+    # Add circle for Postcode A (search radius)
+    folium.Circle(
+        location=[lat_a, lng_a],
+        radius=radius_meters,
+        color=color_a,
+        fill=True,
+        fillColor=color_a,
+        fillOpacity=0.15,
+        weight=2,
+        popup=f"<b>{postcode_a}</b><br>Search radius: {radius_meters:.0f}m"
+    ).add_to(m)
+    
+    # Add marker for Postcode A
+    folium.Marker(
+        location=[lat_a, lng_a],
+        popup=f"<b>{postcode_a}</b>",
+        tooltip=postcode_a,
+        icon=folium.Icon(color='green', icon='home', prefix='fa')
+    ).add_to(m)
+    
+    # Add circle for Postcode B (search radius)
+    folium.Circle(
+        location=[lat_b, lng_b],
+        radius=radius_meters,
+        color=color_b,
+        fill=True,
+        fillColor=color_b,
+        fillOpacity=0.15,
+        weight=2,
+        popup=f"<b>{postcode_b}</b><br>Search radius: {radius_meters:.0f}m"
+    ).add_to(m)
+    
+    # Add marker for Postcode B
+    folium.Marker(
+        location=[lat_b, lng_b],
+        popup=f"<b>{postcode_b}</b>",
+        tooltip=postcode_b,
+        icon=folium.Icon(color='orange', icon='home', prefix='fa')
+    ).add_to(m)
+    
+    # Fit map to show both postcodes with some padding, but limit zoom out
+    m.fit_bounds([[lat_a, lng_a], [lat_b, lng_b]], padding=[50, 50], max_zoom=14)
+    
+    return m
+
 # ======================== SESSION STATE ========================
 if "loading" not in st.session_state:
     st.session_state.loading = False
@@ -124,6 +199,16 @@ if "latest_month" not in st.session_state:
     latest = get_latest_month_with_fallback()
     st.session_state["latest_month"] = latest
     st.session_state["quarter_months"] = build_recent_months(latest, 3)
+# Selected postcodes for badge display
+if "postcode_a_selected" not in st.session_state:
+    st.session_state.postcode_a_selected = None
+if "postcode_b_selected" not in st.session_state:
+    st.session_state.postcode_b_selected = None
+# Reset counters for searchbox (changing key forces fresh state)
+if "reset_a" not in st.session_state:
+    st.session_state.reset_a = 0
+if "reset_b" not in st.session_state:
+    st.session_state.reset_b = 0
 
 latest_month = st.session_state.get("latest_month", get_latest_month_with_fallback())
 quarter_months = st.session_state.get("quarter_months", build_recent_months(latest_month, 3))
@@ -177,60 +262,118 @@ except Exception as e:
     st.stop()
 
 # ======================== HEADER ========================
-st.markdown('<div class="header"><h1>🔍 CrimeCompare</h1><div class="subtitle">Crime data. Postcode clarity.</div></div>', unsafe_allow_html=True)
-st.markdown('<div class="hero fade-in"><h2>Compare crime levels between two England areas</h2><p>Enter two postcodes (e.g., CO2 7QG or E17 5ES), set your search area, and see clear comparisons.</p></div>', unsafe_allow_html=True)
+st.markdown('''
+<div class="header">
+    <h1>🛡️ CrimeCompare</h1>
+    <div class="subtitle">See the real picture — <strong>side by side</strong></div>
+</div>
+''', unsafe_allow_html=True)
+
+# Trust bar
+st.markdown('''
+<div class="trust-bar fade-in">
+    <div class="trust-item"><span class="icon">📊</span> <span class="number">10,000+</span> comparisons</div>
+    <div class="trust-item"><span class="icon">🏛️</span> Official UK Police Data</div>
+    <div class="trust-item"><span class="icon">⚡</span> Real-time updates</div>
+</div>
+''', unsafe_allow_html=True)
+
+st.markdown('''
+<div class="hero fade-in">
+    <h2>Compare crime statistics <span class="highlight">side by side</span></h2>
+    <p>Enter two postcodes, choose your search radius, and get instant clarity on safety levels across England.</p>
+</div>
+''', unsafe_allow_html=True)
 
 # ======================== INPUT SECTION ========================
 colA, colB, colRadius = st.columns([3, 3, 2], gap="large")
 
 with colA:
-    postcode_a = st_searchbox(
-        search_postcode,
-        placeholder="Type 4+ characters (e.g. CO27)",
-        label="📍 Postcode A",
-        key="searchbox_a",
-        clear_on_submit=False,
-        debounce=200
-    )
+    st.markdown('<p class="input-label">📍 Postcode A</p>', unsafe_allow_html=True)
     
-    if postcode_a:
-        # Игнорировать служебные сообщения (подсказки)
-        if postcode_a.startswith('💡') or postcode_a.startswith('❌'):
-            st.info("Please continue typing...")
-        else:
-            actual_postcode_a = postcode_a.split(' - ')[0] if ' - ' in postcode_a else postcode_a
-            if postcode_exists(actual_postcode_a):
-                st.success(f"✅ {postcode_a}")
+    if st.session_state.postcode_a_selected:
+        # Показываем badge с кнопкой сброса
+        badge_col, btn_col = st.columns([5, 1])
+        with badge_col:
+            st.markdown(f'<div class="selected-badge badge-a"><span class="badge-icon">✓</span> {st.session_state.postcode_a_selected}</div>', unsafe_allow_html=True)
+        with btn_col:
+            if st.button("✕", key="clear_a", help="Change postcode"):
+                st.session_state.postcode_a_selected = None
+                st.session_state.reset_a += 1  # Force new searchbox key
+                st.session_state.results = None
+                st.session_state.has_run = False
+                st.rerun()
+        postcode_a = st.session_state.postcode_a_selected
+    else:
+        # Показываем searchbox с динамическим key
+        postcode_a = st_searchbox(
+            search_postcode,
+            placeholder="Type 4+ characters (e.g. CO27)",
+            label="",
+            key=f"searchbox_a_{st.session_state.reset_a}",
+            clear_on_submit=False,
+            debounce=200
+        )
+        
+        if postcode_a:
+            # Игнорировать служебные сообщения
+            if postcode_a.startswith('💡') or postcode_a.startswith('❌'):
+                pass
             else:
-                st.warning(f"⚠️ {postcode_a} not found")
+                actual_postcode_a = postcode_a.split(' - ')[0] if ' - ' in postcode_a else postcode_a
+                if postcode_exists(actual_postcode_a):
+                    st.session_state.postcode_a_selected = postcode_a
+                    st.rerun()
+                else:
+                    st.error(f"⚠️ {postcode_a} not found")
 
 with colB:
-    postcode_b = st_searchbox(
-        search_postcode,
-        placeholder="Type 4+ characters (e.g. E175)",
-        label="📍 Postcode B",
-        key="searchbox_b",
-        clear_on_submit=False,
-        debounce=200
-    )
+    st.markdown('<p class="input-label">📍 Postcode B</p>', unsafe_allow_html=True)
     
-    if postcode_b:
-        # Игнорировать служебные сообщения (подсказки)
-        if postcode_b.startswith('💡') or postcode_b.startswith('❌'):
-            st.info("Please continue typing...")
-        else:
-            actual_postcode_b = postcode_b.split(' - ')[0] if ' - ' in postcode_b else postcode_b
-            if postcode_exists(actual_postcode_b):
-                st.success(f"✅ {postcode_b}")
+    if st.session_state.postcode_b_selected:
+        # Показываем badge с кнопкой сброса
+        badge_col, btn_col = st.columns([5, 1])
+        with badge_col:
+            st.markdown(f'<div class="selected-badge badge-b"><span class="badge-icon">✓</span> {st.session_state.postcode_b_selected}</div>', unsafe_allow_html=True)
+        with btn_col:
+            if st.button("✕", key="clear_b", help="Change postcode"):
+                st.session_state.postcode_b_selected = None
+                st.session_state.reset_b += 1  # Force new searchbox key
+                st.session_state.results = None
+                st.session_state.has_run = False
+                st.rerun()
+        postcode_b = st.session_state.postcode_b_selected
+    else:
+        # Показываем searchbox с динамическим key
+        postcode_b = st_searchbox(
+            search_postcode,
+            placeholder="Type 4+ characters (e.g. E175)",
+            label="",
+            key=f"searchbox_b_{st.session_state.reset_b}",
+            clear_on_submit=False,
+            debounce=200
+        )
+        
+        if postcode_b:
+            # Игнорировать служебные сообщения
+            if postcode_b.startswith('💡') or postcode_b.startswith('❌'):
+                pass
             else:
-                st.warning(f"⚠️ {postcode_b} not found")
+                actual_postcode_b = postcode_b.split(' - ')[0] if ' - ' in postcode_b else postcode_b
+                if postcode_exists(actual_postcode_b):
+                    st.session_state.postcode_b_selected = postcode_b
+                    st.rerun()
+                else:
+                    st.error(f"⚠️ {postcode_b} not found")
 
 with colRadius:
+    st.markdown('<p class="input-label">📏 Search area</p>', unsafe_allow_html=True)
     radius = st.selectbox(
         "Search area",
         ["5 minutes", "10 minutes", "15 minutes", "0.5 miles", "1 mile", "2 miles"],
         index=1,
-        help="Walking time or radius"
+        help="Walking time or radius",
+        label_visibility="collapsed"
     )
 
 st.markdown(f'<div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;"><strong>Latest data:</strong> {format_month_label(latest_month)} | <strong>Quarter:</strong> {format_month_range(quarter_months)}</div>', unsafe_allow_html=True)
@@ -243,17 +386,13 @@ with run_cols[1]:
 if run_clicked:
     st.session_state.has_run = True
     
-    # Проверить что выбраны реальные postcodes, а не служебные сообщения
+    # Используем выбранные postcodes из session state
+    postcode_a = st.session_state.postcode_a_selected
+    postcode_b = st.session_state.postcode_b_selected
+    
+    # Проверить что выбраны оба postcodes
     if not postcode_a or not postcode_b:
-        st.error("❌ Please enter both postcodes")
-        st.stop()
-    
-    if postcode_a.startswith('💡') or postcode_a.startswith('❌'):
-        st.error("❌ Please select a valid postcode for Postcode A")
-        st.stop()
-    
-    if postcode_b.startswith('💡') or postcode_b.startswith('❌'):
-        st.error("❌ Please select a valid postcode for Postcode B")
+        st.error("❌ Please select both postcodes")
         st.stop()
     
     actual_a = postcode_a.split(' - ')[0] if ' - ' in postcode_a else postcode_a
@@ -338,7 +477,8 @@ if st.session_state.has_run:
                            "b": {"total": quarter_summary_b["total_crimes"], "violent": quarter_summary_b["by_category"].get("violence-and-sexual-offences", 0),
                                 "burglary": quarter_summary_b["by_category"].get("burglary", 0), "risk_score": quarter_summary_b["risk_score"],
                                 "risk_level": get_risk_level(quarter_summary_b["risk_score"]), "by_category": quarter_summary_b["by_category"]}},
-                "month": latest_month, "radius": radius,
+                "month": latest_month, "radius": radius, "radius_meters": radius_meters,
+                "coords": {"lat_a": lat_a, "lng_a": lng_a, "lat_b": lat_b, "lng_b": lng_b},
                 "monthly": {"months": quarter_months, "a": monthly_summaries_a, "b": monthly_summaries_b}}
         except Exception as e:
             st.session_state.results = {"error": str(e)}
@@ -360,26 +500,54 @@ if st.session_state.has_run:
         with tab_month:
             month_options = data.get("monthly", {}).get("months", [data["month"]])
             default_month = month_options.index(data["month"]) if data["month"] in month_options else len(month_options) - 1
-            month_cols = st.columns([1, 6, 1])
+            st.markdown("<p style='text-align: center; font-weight: 600; color: #64748b; margin-bottom: 0.5rem; font-size: 0.9rem;'>📅 Select Month</p>", unsafe_allow_html=True)
+            month_cols = st.columns([2, 1, 2])
             with month_cols[1]:
-                selected_month = st.selectbox("Month", month_options, index=default_month, key="month_select", format_func=format_month_label)
+                selected_month = st.selectbox("Month", month_options, index=default_month, key="month_select", format_func=format_month_label, label_visibility="collapsed")
             
             m_a = data.get("monthly", {}).get("a", {}).get(selected_month, {"total_crimes": 0, "risk_score": 0, "by_category": {}})
             m_b = data.get("monthly", {}).get("b", {}).get(selected_month, {"total_crimes": 0, "risk_score": 0, "by_category": {}})
 
-            label_cols = st.columns(2)
-            label_cols[0].markdown(f"<div class='postcode-label large'>{data['postcode_a']}</div>", unsafe_allow_html=True)
-            label_cols[1].markdown(f"<div class='postcode-label large'>{data['postcode_b']}</div>", unsafe_allow_html=True)
-            
-            col_left, col_right = st.columns(2, gap="medium")
-            with col_left:
-                for title, value in [("Total Crimes", m_a.get("total_crimes", 0)), ("Risk Score", m_a.get("risk_score", 0))]:
-                    st.markdown(f'<div class="result-card compact fade-in"><h4>{title}</h4><p>{value}</p></div>', unsafe_allow_html=True)
-            with col_right:
-                for title, value in [("Total Crimes", m_b.get("total_crimes", 0)), ("Risk Score", m_b.get("risk_score", 0))]:
-                    st.markdown(f'<div class="result-card compact fade-in"><h4>{title}</h4><p>{value}</p></div>', unsafe_allow_html=True)
-
-            st.markdown("<div style='margin-top: 1.0rem;'></div>", unsafe_allow_html=True)
+            # Compact side-by-side comparison cards
+            st.markdown(f'''
+            <div class="comparison-row fade-in">
+                <div class="comparison-card card-a">
+                    <div class="card-header">
+                        <span class="dot-a"></span>
+                        <span class="postcode-name">{data['postcode_a']}</span>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="metric">
+                            <span class="metric-value">{m_a.get("total_crimes", 0)}</span>
+                            <span class="metric-label">Crimes</span>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric">
+                            <span class="metric-value">{m_a.get("risk_score", 0)}</span>
+                            <span class="metric-label">Risk Score</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="vs-badge-small">VS</div>
+                <div class="comparison-card card-b">
+                    <div class="card-header">
+                        <span class="dot-b"></span>
+                        <span class="postcode-name">{data['postcode_b']}</span>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="metric">
+                            <span class="metric-value">{m_b.get("total_crimes", 0)}</span>
+                            <span class="metric-label">Crimes</span>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric">
+                            <span class="metric-value">{m_b.get("risk_score", 0)}</span>
+                            <span class="metric-label">Risk Score</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
             
             all_categories = set(m_a.get('by_category', {}).keys()) | set(m_b.get('by_category', {}).keys())
             category_data = [{'Category': format_category_name(cat), data['postcode_a']: m_a.get('by_category', {}).get(cat, 0),
@@ -388,12 +556,12 @@ if st.session_state.has_run:
             
             fig_cat = go.Figure()
             fig_cat.add_trace(go.Bar(name=data['postcode_a'], x=df_cat['Category'], y=df_cat.get(data['postcode_a'], []),
-                                    marker_color='#2d6a4f', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                    marker_color='#0d9488', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_cat.add_trace(go.Bar(name=data['postcode_b'], x=df_cat['Category'], y=df_cat.get(data['postcode_b'], []),
-                                    marker_color='#ff7043', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                    marker_color='#f97316', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_cat.update_layout(title="Crime Types Side-by-Side", xaxis_title="", yaxis_title="Incidents",
                                 barmode='group', height=420, xaxis_tickangle=-45, paper_bgcolor='white',
-                                plot_bgcolor='#fafafa', font=dict(family='Inter, sans-serif', size=12))
+                                plot_bgcolor='#f8fafc', font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             st.plotly_chart(fig_cat, use_container_width=True, key="category_chart")
 
             trend_categories = set()
@@ -404,9 +572,10 @@ if st.session_state.has_run:
             
             trend_options = ["All categories"] + sorted(trend_categories)
             trend_labels = {opt: ("All categories" if opt == "All categories" else format_category_name(opt)) for opt in trend_options}
-            trend_cols = st.columns([1, 6, 1])
+            st.markdown("<p style='text-align: center; font-weight: 600; color: #64748b; margin-bottom: 0.5rem; font-size: 0.9rem;'>📈 Trend by category (last 3 months)</p>", unsafe_allow_html=True)
+            trend_cols = st.columns([1, 2, 1])
             with trend_cols[1]:
-                selected_trend = st.selectbox("Trend by category (last 3 months)", trend_options, format_func=lambda x: trend_labels[x], index=0)
+                selected_trend = st.selectbox("Trend category", trend_options, format_func=lambda x: trend_labels[x], index=0, label_visibility="collapsed")
             
             trend_rows = []
             for month_key in data.get('monthly', {}).get('months', []):
@@ -422,14 +591,14 @@ if st.session_state.has_run:
             fig_trend.add_trace(go.Scatter(x=trend_df[trend_df['Postcode'] == data['postcode_a']]['Month'],
                                           y=trend_df[trend_df['Postcode'] == data['postcode_a']]['Count'],
                                           mode='lines+markers', name=data['postcode_a'],
-                                          line=dict(color='#2d6a4f', width=3), marker=dict(size=8)))
+                                          line=dict(color='#0d9488', width=3), marker=dict(size=10)))
             fig_trend.add_trace(go.Scatter(x=trend_df[trend_df['Postcode'] == data['postcode_b']]['Month'],
                                           y=trend_df[trend_df['Postcode'] == data['postcode_b']]['Count'],
                                           mode='lines+markers', name=data['postcode_b'],
-                                          line=dict(color='#ff7043', width=3), marker=dict(size=8)))
+                                          line=dict(color='#f97316', width=3), marker=dict(size=10)))
             fig_trend.update_layout(title=f"{trend_labels.get(selected_trend)}", xaxis_title="", yaxis_title="Incidents",
-                                  height=420, paper_bgcolor='white', plot_bgcolor='#fafafa',
-                                  font=dict(family='Inter, sans-serif', size=12))
+                                  height=420, paper_bgcolor='white', plot_bgcolor='#f8fafc',
+                                  font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             fig_trend.update_xaxes(type="category", categoryorder="array",
                                   categoryarray=[format_month_label(m) for m in data.get('monthly', {}).get('months', [])])
             st.plotly_chart(fig_trend, use_container_width=True, key="trend_chart")
@@ -440,12 +609,12 @@ if st.session_state.has_run:
             
             fig_q_total = go.Figure(data=[go.Bar(x=[data['postcode_a'], data['postcode_b']],
                                                  y=[data['quarter']['a']['total'], data['quarter']['b']['total']],
-                                                 marker_color=['#006d77', '#ffb703'],
+                                                 marker_color=['#0d9488', '#f97316'],
                                                  text=[data['quarter']['a']['total'], data['quarter']['b']['total']],
                                                  textposition='auto', hovertemplate='<b>%{x}</b><br>Quarter total: %{y}<extra></extra>')])
             fig_q_total.update_layout(title="Total Crimes", xaxis_title="", yaxis_title="Incidents",
-                                     height=420, showlegend=False, paper_bgcolor='white', plot_bgcolor='#fafafa',
-                                     font=dict(family='Inter, sans-serif', size=12))
+                                     height=420, showlegend=False, paper_bgcolor='white', plot_bgcolor='#f8fafc',
+                                     font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             st.plotly_chart(fig_q_total, use_container_width=True, key="quarter_total_chart")
 
             quarter_categories = set(data['quarter']['a']['by_category'].keys()) | set(data['quarter']['b']['by_category'].keys())
@@ -455,12 +624,12 @@ if st.session_state.has_run:
             
             fig_q_cat = go.Figure()
             fig_q_cat.add_trace(go.Bar(name=data['postcode_a'], x=df_q_cat['Category'], y=df_q_cat[data['postcode_a']],
-                                      marker_color='#118ab2', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                      marker_color='#0d9488', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_q_cat.add_trace(go.Bar(name=data['postcode_b'], x=df_q_cat['Category'], y=df_q_cat[data['postcode_b']],
-                                      marker_color='#ef476f', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                      marker_color='#f97316', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_q_cat.update_layout(title="Crime Types Side-by-Side", xaxis_title="", yaxis_title="Incidents",
                                   barmode='group', height=460, xaxis_tickangle=-45, paper_bgcolor='white',
-                                  plot_bgcolor='#fafafa', font=dict(family='Inter, sans-serif', size=12))
+                                  plot_bgcolor='#f8fafc', font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             st.plotly_chart(fig_q_cat, use_container_width=True, key="quarter_category_chart")
 
         st.markdown(f'''<div class="text-summary fade-in"><h4>Summary</h4><p>
@@ -477,28 +646,66 @@ if st.session_state.has_run:
             <br><br><em>Data within {data['radius']} of each postcode.</em>
         </p></div>''', unsafe_allow_html=True)
 
+        # ======================== INTERACTIVE MAP ========================
+        if 'coords' in data:
+            st.markdown('<div class="map-section fade-in">', unsafe_allow_html=True)
+            st.markdown('<div class="map-title">📍 Search Areas Map</div>', unsafe_allow_html=True)
+            
+            coords = data['coords']
+            comparison_map = create_comparison_map(
+                coords['lat_a'], coords['lng_a'],
+                coords['lat_b'], coords['lng_b'],
+                data['postcode_a'], data['postcode_b'],
+                data.get('radius_meters', 805)
+            )
+            
+            st.markdown('<div class="map-container">', unsafe_allow_html=True)
+            st_folium(comparison_map, width=None, height=400, returned_objects=[])
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown(f'''
+            <div class="map-legend">
+                <div class="map-legend-item">
+                    <span class="map-legend-dot a"></span>
+                    {data['postcode_a']}
+                </div>
+                <div class="map-legend-item">
+                    <span class="map-legend-dot b"></span>
+                    {data['postcode_b']}
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
 # ======================== FEEDBACK ========================
-st.markdown("---")
-st.markdown("### 💬 Feedback")
+st.markdown('<div class="feedback-section">', unsafe_allow_html=True)
+st.markdown('<h3 class="feedback-title">Share Your Feedback</h3>', unsafe_allow_html=True)
 
 with st.form("feedback_form"):
     top_cols = st.columns([1.5, 4])
     with top_cols[0]:
-        rating_choice = st.radio("Was this helpful?", ["👍", "👎"], horizontal=True, index=0)
-        rating = 5 if "👍" in rating_choice else 1
+        st.markdown("<p style='font-weight: 600; margin-bottom: 0.5rem; color: #334155;'>Was this helpful?</p>", unsafe_allow_html=True)
+        rating_choice = st.radio("Rating", ["👍 Yes", "👎 No"], horizontal=True, index=None, label_visibility="collapsed")
+        rating = 5 if rating_choice and "👍" in rating_choice else (1 if rating_choice else None)
     with top_cols[1]:
-        feedback_text = st.text_area("Comments", placeholder="Share your thoughts...", height=80, max_chars=200, label_visibility="collapsed")
+        st.markdown("<p style='font-weight: 600; margin-bottom: 0.5rem; color: #334155;'>Your thoughts (optional)</p>", unsafe_allow_html=True)
+        feedback_text = st.text_area("Comments", placeholder="What could we improve? Any bugs to report?", height=100, max_chars=300, label_visibility="collapsed")
     
     btn_cols = st.columns([3, 2, 3])
     with btn_cols[1]:
-        submitted = st.form_submit_button("Submit", use_container_width=True)
+        submitted = st.form_submit_button("Send Feedback", use_container_width=True)
     
     if submitted:
-        try:
-            save_feedback(user_id, rating, feedback_text or "", "crime_comparator")
-            st.success("✅ Thank you!")
-        except Exception as e:
-            st.error(f"Failed: {e}")
+        if rating is None and not feedback_text:
+            st.warning("Please select Yes/No or write a comment")
+        else:
+            try:
+                save_feedback(user_id, rating or 0, feedback_text or "", "crime_comparator")
+                st.success("Thank you for your feedback!")
+            except Exception as e:
+                st.error(f"Failed: {e}")
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ======================== FOOTER ========================
 st.markdown('''<div class="legal-card" style="margin-top: 1.5rem;"><h4>📜 Legal & Attribution</h4><p>
