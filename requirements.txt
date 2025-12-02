@@ -7,3 +7,5 @@ requests
 pandas
 plotly
 aiohttp>=3.9.0
+folium
+streamlit-folium
