@@ -339,7 +339,7 @@ except Exception as e:
 st.markdown('''
 <div class="header">
     <h1>🛡️ CrimeCompare</h1>
-    <div class="subtitle">See the real picture</div>
+    <div class="subtitle">See the real picture across England</div>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -351,18 +351,11 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-st.markdown('''
-<div class="hero fade-in">
-    <h2>Compare crime statistics</h2>
-    <p>Enter two postcodes, choose your search radius, and get instant clarity on safety levels across England.</p>
-</div>
-''', unsafe_allow_html=True)
-
 # ======================== INPUT SECTION ========================
-colA, colB, colRadius = st.columns([3, 3, 2], gap="large")
+colA, colB, colRadius = st.columns([2, 2, 2], gap="large")
 
 with colA:
-    st.markdown('<p class="input-label">Postcode A</p>', unsafe_allow_html=True)
+    st.markdown('<p class="input-label">📍 Postcode A</p>', unsafe_allow_html=True)
     
     if st.session_state.postcode_a_selected:
         badge_col, btn_col = st.columns([5, 1])
@@ -390,7 +383,7 @@ with colA:
             st.markdown(f'<p class="input-error">{st.session_state.postcode_a_error}</p>', unsafe_allow_html=True)
 
 with colB:
-    st.markdown('<p class="input-label">Postcode B</p>', unsafe_allow_html=True)
+    st.markdown('<p class="input-label">📍 Postcode B</p>', unsafe_allow_html=True)
     
     if st.session_state.postcode_b_selected:
         badge_col, btn_col = st.columns([5, 1])
@@ -418,9 +411,9 @@ with colB:
             st.markdown(f'<p class="input-error">{st.session_state.postcode_b_error}</p>', unsafe_allow_html=True)
 
 with colRadius:
-    st.markdown('<p class="input-label">Search area</p>', unsafe_allow_html=True)
+    st.markdown('<p class="input-label">📏 Search Area</p>', unsafe_allow_html=True)
     radius = st.selectbox(
-        "Search area",
+        "Search Area",
         ["5 minutes", "10 minutes", "15 minutes", "0.5 miles", "1 mile", "2 miles"],
         index=1,
         help="Walking time or radius",
@@ -834,9 +827,6 @@ if st.session_state.has_run:
 
         # ======================== INTERACTIVE MAP ========================
         if 'coords' in data:
-            st.markdown('<div class="map-section fade-in">', unsafe_allow_html=True)
-            st.markdown('<div class="map-title">📍 Search Areas Map</div>', unsafe_allow_html=True)
-            
             coords = data['coords']
             comparison_map = create_comparison_map(
                 coords['lat_a'], coords['lng_a'],
@@ -845,9 +835,7 @@ if st.session_state.has_run:
                 data.get('radius_meters', 805)
             )
             
-            st.markdown('<div class="map-container">', unsafe_allow_html=True)
             st_folium(comparison_map, width=None, height=400, returned_objects=[])
-            st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown(f'''
             <div class="map-legend">
@@ -861,7 +849,6 @@ if st.session_state.has_run:
                 </div>
             </div>
             ''', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
 # ======================== FEEDBACK ========================
 with st.expander("💬 Share Your Feedback", expanded=False):

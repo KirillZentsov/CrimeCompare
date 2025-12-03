@@ -355,6 +355,20 @@ div[data-testid="stExpander"] .stForm button:active {
     height: 100px !important;
     min-height: 100px !important;
     max-height: 100px !important;
+    outline: none !important;
+}
+
+/* Reset red outlines from textarea wrapper */
+.stTextArea,
+.stTextArea > div,
+.stTextArea *::before,
+.stTextArea *::after {
+    outline: none !important;
+}
+
+.stTextArea > div > div {
+    border: none !important;
+    outline: none !important;
 }
 
 .stTextArea textarea:focus {
@@ -754,6 +768,20 @@ button[title="Copy link"] {
     border: 2px solid var(--gray-200);
 }
 
+/* Remove white space around folium map */
+iframe[title="streamlit_folium.st_folium"] {
+    border-radius: var(--radius-lg) !important;
+}
+
+div[data-testid="stElementContainer"]:has(iframe[title="streamlit_folium.st_folium"]) {
+    margin-top: 1.5rem !important;
+}
+
+div[data-testid="stElementContainer"]:has(iframe[title="streamlit_folium.st_folium"]) > div {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
 .map-legend {
     display: flex;
     justify-content: center;
@@ -1038,7 +1066,7 @@ header {visibility: hidden;}
 /* ==================== INPUT FIELDS ==================== */
 .stTextInput > div > div > input {
     border-radius: var(--radius) !important;
-    border: 2px solid #d8e2ee !important;
+    border: 2px solid var(--gray-300) !important;
     padding: 0.85rem 1rem !important;
     font-size: 1rem !important;
     font-weight: 600 !important;
@@ -1047,42 +1075,21 @@ header {visibility: hidden;}
     text-transform: uppercase !important;
     letter-spacing: 0.02em !important;
     transition: var(--transition) !important;
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
+    box-shadow: none !important;
     outline: none !important;
 }
 
-/* Reset ALL possible red borders/outlines from Streamlit/browser */
+/* Reset red outlines from Streamlit/browser but keep input border */
 .stTextInput,
 .stTextInput > div,
-.stTextInput > div > div,
-.stTextInput > div > div > input,
-.stTextInput *,
 .stTextInput *::before,
 .stTextInput *::after {
     outline: none !important;
-    outline-color: transparent !important;
-    outline-width: 0 !important;
-}
-
-/* Also reset label wrapper that might have red outline */
-.stTextInput > label,
-.stTextInput [data-baseweb],
-.stTextInput [data-baseweb] * {
-    outline: none !important;
-    border-color: transparent !important;
 }
 
 .stTextInput > div > div {
     box-shadow: none !important;
     border: none !important;
-    outline: none !important;
-}
-
-/* Override any Streamlit validation styles */
-.stTextInput[data-stale="false"] > div > div,
-.stTextInput[data-stale="true"] > div > div {
-    border: none !important;
-    box-shadow: none !important;
     outline: none !important;
 }
 
