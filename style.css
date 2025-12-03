@@ -48,6 +48,23 @@
     /* Shadows - Softer, more refined */
     --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
     --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.06);
+    --shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12);
+    --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.16);
+    --shadow-glow: 0 0 40px rgba(13, 148, 136, 0.15);
+    
+    /* Borders */
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-2xl: 32px;
+    
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
 
 /* ==================== SEARCHBOX STYLING ==================== */
 /* Main searchbox container */
@@ -74,6 +91,22 @@ div[class*="searchbox"] input,
 [data-testid="stSearchbox"] input:focus,
 div[class*="searchbox"] input:focus,
 .stSearchbox input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
+    outline: none !important;
+}
+
+/* Remove red border on invalid searchbox */
+[data-testid="stSearchbox"] input:invalid,
+div[class*="searchbox"] input:invalid,
+.stSearchbox input:invalid {
+    border-color: var(--gray-300) !important;
+    outline: none !important;
+}
+
+[data-testid="stSearchbox"] input:focus:invalid,
+div[class*="searchbox"] input:focus:invalid,
+.stSearchbox input:focus:invalid {
     border-color: var(--primary) !important;
     box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
     outline: none !important;
@@ -145,21 +178,118 @@ div[class*="searchbox"] label {
 }
 
 /* ==================== FEEDBACK SECTION ==================== */
-.feedback-section {
-    margin-top: 3rem;
-    padding: 2rem;
-    background: linear-gradient(135deg, var(--gray-50) 0%, #f0fdfa 100%);
-    border-radius: var(--radius-xl);
-    border: 2px solid var(--gray-200);
-    box-shadow: var(--shadow);
+/* ==================== FEEDBACK EXPANDER ==================== */
+/* Expander container */
+div[data-testid="stExpander"] {
+    margin-top: 2.5rem;
+    border: none !important;
+    background: transparent !important;
 }
 
-.feedback-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--gray-900);
-    margin: 0 0 1.25rem 0;
+div[data-testid="stExpander"] details {
+    background: white !important;
+    border: 2px solid var(--gray-200) !important;
+    border-radius: var(--radius-xl) !important;
+    box-shadow: var(--shadow) !important;
+    overflow: hidden;
+    transition: all 0.3s ease !important;
+}
+
+div[data-testid="stExpander"] details:hover {
+    border-color: var(--primary-light) !important;
+    box-shadow: var(--shadow-md), 0 0 0 3px rgba(13, 148, 136, 0.08) !important;
+}
+
+div[data-testid="stExpander"] details[open] {
+    border-color: var(--primary) !important;
+    box-shadow: var(--shadow-lg), 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
+}
+
+/* Expander header */
+div[data-testid="stExpander"] summary {
+    padding: 1rem 1.25rem !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: var(--gray-800) !important;
+    background: linear-gradient(135deg, #f8fafc 0%, #f0fdfa 100%) !important;
+    border-bottom: none !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+div[data-testid="stExpander"] details[open] summary {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+    color: var(--primary-dark) !important;
+    border-bottom: 1px solid var(--gray-200) !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+    color: var(--primary-dark) !important;
+}
+
+/* Arrow icon styling */
+div[data-testid="stExpander"] summary svg {
+    color: var(--primary) !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    width: 20px !important;
+    height: 20px !important;
+}
+
+div[data-testid="stExpander"] details[open] summary svg {
+    transform: rotate(180deg) !important;
+}
+
+/* Expander content with slide animation */
+div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
+    padding: 1.5rem !important;
+    background: white !important;
+    animation: slideDown 0.3s ease-out !important;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Form submit button in feedback - same style as Compare button */
+div[data-testid="stExpander"] button[data-testid="stFormSubmitButton"],
+div[data-testid="stExpander"] .stForm button,
+div[data-testid="stExpander"] .stForm button[type="submit"],
+div[data-testid="stExpander"] .stForm button[kind="secondaryFormSubmit"] {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 0.875rem 2rem !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    transition: all 0.25s ease !important;
+    box-shadow: var(--shadow), 0 4px 12px rgba(13, 148, 136, 0.3) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+div[data-testid="stExpander"] button[data-testid="stFormSubmitButton"]:hover,
+div[data-testid="stExpander"] .stForm button:hover {
+    transform: translateY(-2px) scale(1.01) !important;
+    box-shadow: var(--shadow-md), 0 8px 20px rgba(13, 148, 136, 0.35) !important;
+}
+
+div[data-testid="stExpander"] button[data-testid="stFormSubmitButton"]:active,
+div[data-testid="stExpander"] .stForm button:active {
+    transform: translateY(0) scale(0.99) !important;
 }
 
 /* Radio buttons in feedback - Modern card style */
@@ -168,30 +298,31 @@ div[class*="searchbox"] label {
 }
 
 .stRadio [role="radiogroup"] {
-    background: white;
-    padding: 0.5rem;
+    background: var(--gray-50);
+    padding: 0.375rem;
     border-radius: var(--radius);
     border: 2px solid var(--gray-200);
-    gap: 0.5rem !important;
+    gap: 0.375rem !important;
     display: flex;
 }
 
 .stRadio [role="radiogroup"] label {
     font-family: 'DM Sans', sans-serif !important;
     font-weight: 600 !important;
-    font-size: 1rem !important;
-    padding: 0.6rem 1rem !important;
-    border-radius: var(--radius-sm) !important;
+    font-size: 0.9rem !important;
+    padding: 0.5rem 0.875rem !important;
+    border-radius: 6px !important;
     transition: all 0.2s ease !important;
     border: 2px solid transparent !important;
     cursor: pointer !important;
     display: flex !important;
     align-items: center !important;
-    gap: 0.4rem !important;
+    gap: 0.35rem !important;
+    background: white !important;
 }
 
 .stRadio [role="radiogroup"] label:hover {
-    background: var(--gray-100) !important;
+    background: var(--gray-50) !important;
     border-color: var(--gray-300) !important;
 }
 
@@ -200,29 +331,47 @@ div[class*="searchbox"] label {
     display: none !important;
 }
 
-/* Selected state */
+/* Selected state - Yes button */
 .stRadio [role="radiogroup"] label[data-checked="true"],
 .stRadio [role="radiogroup"] label:has(input:checked) {
-    background: var(--primary-bg) !important;
+    background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%) !important;
     border-color: var(--primary) !important;
     color: var(--primary-dark) !important;
+    box-shadow: 0 2px 8px rgba(13, 148, 136, 0.15) !important;
 }
 
 /* Text area in feedback */
 .stTextArea textarea {
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 1rem !important;
+    font-size: 0.95rem !important;
     font-weight: 400 !important;
     color: var(--gray-800) !important;
-    background: white !important;
-    border: 2px solid var(--gray-300) !important;
+    background: var(--gray-50) !important;
+    border: 2px solid var(--gray-200) !important;
     border-radius: var(--radius) !important;
-    padding: 1rem !important;
+    padding: 0.875rem 1rem !important;
     transition: all 0.2s ease !important;
-    resize: vertical !important;
+    resize: none !important;
+    height: 100px !important;
+    min-height: 100px !important;
+    max-height: 100px !important;
 }
 
 .stTextArea textarea:focus {
+    background: white !important;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
+    outline: none !important;
+}
+
+/* Remove red border on invalid textarea */
+.stTextArea textarea:invalid {
+    border-color: var(--gray-200) !important;
+    outline: none !important;
+}
+
+.stTextArea textarea:focus:invalid {
+    background: white !important;
     border-color: var(--primary) !important;
     box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
     outline: none !important;
@@ -233,7 +382,15 @@ div[class*="searchbox"] label {
     font-style: normal !important;
 }
 
-/* Feedback form container */
+/* Feedback form container - inside expander */
+div[data-testid="stExpander"] .stForm {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Default form styling (for forms outside expander) */
 .stForm {
     background: white !important;
     border-radius: var(--radius-lg) !important;
@@ -251,6 +408,14 @@ div[class*="searchbox"] label {
     font-weight: 600;
     color: var(--gray-700);
     margin-bottom: 0.5rem;
+}
+
+.input-error {
+    margin-top: 0.35rem;
+    color: var(--danger);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
 }
 
 /* ==================== SELECTED POSTCODE BADGE ==================== */
@@ -624,23 +789,6 @@ button[title="Copy link"] {
     background: var(--compare-b);
     box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
 }
-    --shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12);
-    --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.16);
-    --shadow-glow: 0 0 40px rgba(13, 148, 136, 0.15);
-    
-    /* Borders */
-    --radius-sm: 8px;
-    --radius: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
-    --radius-2xl: 32px;
-    
-    /* Transitions */
-    --transition-fast: 150ms ease;
-    --transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 /* ==================== BASE STYLES ==================== */
 * {
@@ -679,8 +827,8 @@ header {visibility: hidden;}
 /* ==================== HEADER / BRANDING ==================== */
 .header {
     text-align: center;
-    margin-bottom: 2rem;
-    padding: 3rem 2.5rem;
+    margin-bottom: 1.5rem;
+    padding: 2rem 2rem;
     background: linear-gradient(135deg, var(--primary) 0%, #0891b2 50%, #06b6d4 100%);
     border-radius: var(--radius-2xl);
     box-shadow: var(--shadow-lg), var(--shadow-glow);
@@ -725,7 +873,7 @@ header {visibility: hidden;}
 .header h1 {
     position: relative;
     margin: 0;
-    font-size: 3.25rem;
+    font-size: 2.75rem;
     font-weight: 800;
     color: white;
     letter-spacing: -0.03em;
@@ -734,8 +882,8 @@ header {visibility: hidden;}
 
 .header .subtitle {
     position: relative;
-    margin-top: 0.75rem;
-    font-size: 1.2rem;
+    margin-top: 0.5rem;
+    font-size: 1.1rem;
     color: rgba(255, 255, 255, 0.95);
     font-weight: 500;
     letter-spacing: 0.01em;
@@ -750,15 +898,15 @@ header {visibility: hidden;}
 .trust-bar {
     display: flex;
     justify-content: center;
-    gap: 2rem;
+    gap: 1.5rem;
     flex-wrap: wrap;
-    margin: -1rem auto 2rem auto;
-    padding: 1rem 2rem;
+    margin: -0.75rem auto 1.5rem auto;
+    padding: 0.75rem 1.5rem;
     background: var(--surface-elevated);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow);
     border: 1px solid var(--gray-200);
-    max-width: 700px;
+    max-width: 650px;
     position: relative;
     z-index: 10;
 }
@@ -784,8 +932,8 @@ header {visibility: hidden;}
 /* ==================== HERO SECTION ==================== */
 .hero {
     text-align: center;
-    margin-bottom: 2rem;
-    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1.5rem 2rem;
     background: var(--surface-elevated);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow);
@@ -794,10 +942,10 @@ header {visibility: hidden;}
 }
 
 .hero h2 {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--gray-900);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     line-height: 1.3;
     letter-spacing: -0.02em;
 }
@@ -812,8 +960,8 @@ header {visibility: hidden;}
 .hero p {
     margin: 0;
     color: var(--gray-600);
-    font-size: 1.05rem;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 /* ==================== CARD STYLES ==================== */
@@ -890,21 +1038,82 @@ header {visibility: hidden;}
 /* ==================== INPUT FIELDS ==================== */
 .stTextInput > div > div > input {
     border-radius: var(--radius) !important;
-    border: 2px solid var(--gray-300) !important;
+    border: 2px solid #d8e2ee !important;
     padding: 0.85rem 1rem !important;
     font-size: 1rem !important;
-    font-weight: 500 !important;
-    background: white !important;
+    font-weight: 600 !important;
+    background: #f7f9fc !important;
+    color: var(--gray-800) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.02em !important;
     transition: var(--transition) !important;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
+    outline: none !important;
+}
+
+/* Reset ALL possible red borders/outlines from Streamlit/browser */
+.stTextInput,
+.stTextInput > div,
+.stTextInput > div > div,
+.stTextInput > div > div > input,
+.stTextInput *,
+.stTextInput *::before,
+.stTextInput *::after {
+    outline: none !important;
+    outline-color: transparent !important;
+    outline-width: 0 !important;
+}
+
+/* Also reset label wrapper that might have red outline */
+.stTextInput > label,
+.stTextInput [data-baseweb],
+.stTextInput [data-baseweb] * {
+    outline: none !important;
+    border-color: transparent !important;
+}
+
+.stTextInput > div > div {
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
+}
+
+/* Override any Streamlit validation styles */
+.stTextInput[data-stale="false"] > div > div,
+.stTextInput[data-stale="true"] > div > div {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
 }
 
 .stTextInput > div > div > input:focus {
     border-color: var(--primary) !important;
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12) !important;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06), 0 0 0 2px rgba(13, 148, 136, 0.18) !important;
+    outline: none !important;
+}
+
+.stTextInput > div > div > input:focus-visible,
+.stTextInput > div > div > input:active {
+    outline: none !important;
+}
+
+.stTextInput > div > div > input:invalid {
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
+    border-color: #d8e2ee !important;
+    outline: none !important;
+}
+
+/* When focused AND invalid - keep green border, no red */
+.stTextInput > div > div > input:focus:invalid {
+    border-color: var(--primary) !important;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06), 0 0 0 2px rgba(13, 148, 136, 0.18) !important;
+    outline: none !important;
 }
 
 .stTextInput > div > div > input::placeholder {
-    color: var(--gray-400) !important;
+    color: #9ca3af !important;
+    text-transform: uppercase !important;
+    font-style: italic !important;
 }
 
 .stSelectbox > div > div {
@@ -1252,6 +1461,29 @@ header {visibility: hidden;}
     color: var(--gray-500);
 }
 
+/* ==================== MINIMAL FOOTER ==================== */
+.footer-minimal {
+    margin-top: 2rem;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    color: var(--gray-500);
+    line-height: 1.8;
+}
+
+.footer-minimal a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+.footer-minimal a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
 /* ==================== RADIO & TABS ==================== */
 .stRadio > label {
     font-weight: 600;
@@ -1441,10 +1673,38 @@ header {visibility: hidden;}
     }
 }
 
-/* ==================== FOCUS STATES (Accessibility) ==================== */
-button:focus-visible,
+/* ==================== GLOBAL INVALID STATE RESET ==================== */
+/* Remove browser default red border/outline on invalid inputs */
+input:invalid,
+textarea:invalid,
+select:invalid,
+input:-moz-ui-invalid,
+textarea:-moz-ui-invalid,
+select:-moz-ui-invalid {
+    box-shadow: none !important;
+    outline: none !important;
+    border-color: inherit !important;
+}
+
+input:focus:invalid,
+textarea:focus:invalid,
+select:focus:invalid,
+input:focus:-moz-ui-invalid,
+textarea:focus:-moz-ui-invalid,
+select:focus:-moz-ui-invalid {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Override focus-visible to use green, not browser default */
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
+    outline: none !important;
+}
+
+/* ==================== FOCUS STATES (Accessibility) ==================== */
+button:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
 }
