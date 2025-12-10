@@ -115,7 +115,7 @@ def create_comparison_map(lat_a: float, lng_a: float, lat_b: float, lng_b: float
     
     # Colors matching our theme
     color_a = '#0d9488'  # Teal
-    color_b = '#f97316'  # Orange
+    color_b = '#3b82f6'  # Blue
     
     # Gradient circles - multiple layers with decreasing opacity
     # Creates a soft, diffused effect without hard edges
@@ -167,7 +167,7 @@ def create_comparison_map(lat_a: float, lng_a: float, lat_b: float, lng_b: float
         location=[lat_b, lng_b],
         popup=f"<b>{postcode_b}</b><br>Search radius: {radius_meters:.0f}m",
         tooltip=postcode_b,
-        icon=folium.Icon(color='orange', icon='home', prefix='fa')
+        icon=folium.Icon(color='blue', icon='home', prefix='fa')
     ).add_to(m)
     
     # Fit map to show both postcodes with some padding
@@ -213,12 +213,124 @@ def severity_buckets(by_category: dict) -> dict:
     return levels
 
 
-def calc_density(total_crimes: int, radius_meters: float) -> float:
+def calc_density(total_crimes: int, radius_meters: float) -> int:
     """Crimes per km^2 based on circular search area."""
     if radius_meters <= 0:
-        return 0.0
+        return 0
     area_km2 = math.pi * (radius_meters / 1000) ** 2
-    return round(total_crimes / area_km2, 2) if area_km2 > 0 else 0.0
+    return round(total_crimes / area_km2) if area_km2 > 0 else 0
+
+
+def format_category_name(cat: str) -> str:
+    """Format category name for display."""
+    return cat.replace("-", " ").title()
+
+
+def calc_safer_text(total_a: int, total_b: int, postcode_a: str, postcode_b: str) -> str:
+    """Calculate which postcode is safer and by how much."""
+    if total_a == 0 and total_b == 0:
+        return "No crimes recorded in either area"
+    
+    if total_b > 0 and total_a < total_b:
+        safer_pct = round((total_b - total_a) / total_b * 100)
+        if safer_pct < 5:
+            return f"Both areas show similar crime levels ({total_a} vs {total_b})"
+        return f"🏆 <strong>{postcode_a}</strong> is {safer_pct}% safer with {total_a} vs {total_b} crimes"
+    elif total_a > 0 and total_b < total_a:
+        safer_pct = round((total_a - total_b) / total_a * 100)
+        if safer_pct < 5:
+            return f"Both areas show similar crime levels ({total_a} vs {total_b})"
+        return f"🏆 <strong>{postcode_b}</strong> is {safer_pct}% safer with {total_b} vs {total_a} crimes"
+    else:
+        return f"Both areas show similar crime levels ({total_a} vs {total_b})"
+
+
+def calc_top_category(by_category: dict, total: int) -> tuple:
+    """Find top crime category and its percentage."""
+    if not by_category or total == 0:
+        return "N/A", 0
+    top_cat = max(by_category, key=by_category.get)
+    top_pct = round(by_category[top_cat] / total * 100)
+    return format_category_name(top_cat), top_pct
+
+
+def calc_key_differences(cat_a: dict, cat_b: dict, limit: int = 3) -> list:
+    """Calculate top differences between two category dicts."""
+    all_categories = set(cat_a.keys()) | set(cat_b.keys())
+    differences = []
+    
+    for cat in all_categories:
+        val_a = cat_a.get(cat, 0)
+        val_b = cat_b.get(cat, 0)
+        
+        # Skip if both are zero
+        if val_a == 0 and val_b == 0:
+            continue
+            
+        # Calculate percentage difference
+        if val_b > 0:
+            diff_pct = round((val_a - val_b) / val_b * 100)
+        elif val_a > 0:
+            diff_pct = 100
+        else:
+            diff_pct = 0
+            
+        differences.append({
+            "category": format_category_name(cat),
+            "val_a": val_a,
+            "val_b": val_b,
+            "diff_pct": diff_pct
+        })
+    
+    # Sort by absolute difference
+    differences.sort(key=lambda x: abs(x["diff_pct"]), reverse=True)
+    return differences[:limit]
+
+
+def format_differences_html(differences: list) -> str:
+    """Format differences list as HTML."""
+    lines = []
+    for d in differences:
+        if d["diff_pct"] > 5:
+            lines.append(f"• {d['category']}: {d['val_a']} vs {d['val_b']} (A is {d['diff_pct']}% higher)")
+        elif d["diff_pct"] < -5:
+            lines.append(f"• {d['category']}: {d['val_a']} vs {d['val_b']} (B is {abs(d['diff_pct'])}% higher)")
+        else:
+            lines.append(f"• {d['category']}: {d['val_a']} vs {d['val_b']} (similar)")
+    return "<br>".join(lines) if lines else "No significant differences"
+
+
+def calc_trend(monthly_data: dict, months: list) -> tuple:
+    """Calculate trend from first to last month. Returns (percent, arrow_text)."""
+    if len(months) < 2:
+        return 0, "—"
+    
+    first_month = months[0]
+    last_month = months[-1]
+    
+    first_val = monthly_data.get(first_month, {}).get("total_crimes", 0)
+    last_val = monthly_data.get(last_month, {}).get("total_crimes", 0)
+    
+    if first_val == 0:
+        return 0, "—"
+    
+    trend_pct = round((last_val - first_val) / first_val * 100)
+    
+    if trend_pct > 5:
+        return trend_pct, f"↗️ +{trend_pct}%"
+    elif trend_pct < -5:
+        return trend_pct, f"↘️ {trend_pct}%"
+    else:
+        return trend_pct, "→ stable"
+
+
+def get_monthly_values(monthly_data: dict, months: list) -> str:
+    """Get monthly crime values as string like '40 → 43 → 45'."""
+    values = []
+    for m in months:
+        val = monthly_data.get(m, {}).get("total_crimes", 0)
+        values.append(str(val))
+    return " → ".join(values)
 
 
 def handle_postcode_input(input_key: str, selected_key: str, error_key: str) -> None:
@@ -346,13 +458,13 @@ st.markdown('''
 # Trust bar
 st.markdown('''
 <div class="trust-bar fade-in">
-    <div class="trust-item"><span class="icon">📊</span> <span class="number">10,000+</span> comparisons</div>
+    <div class="trust-item"><span class="icon">⚖️</span> Side by side</div>
     <div class="trust-item"><span class="icon">⚡</span> Most Current Police Data</div>
 </div>
 ''', unsafe_allow_html=True)
 
 # ======================== INPUT SECTION ========================
-colA, colB, colRadius = st.columns([2, 2, 2], gap="large")
+spacer1, colA, colB, colRadius, spacer2 = st.columns([1, 3, 3, 2, 1], gap="medium")
 
 with colA:
     st.markdown('<p class="input-label">📍 Postcode A</p>', unsafe_allow_html=True)
@@ -540,8 +652,7 @@ if st.session_state.has_run:
             st.error(f"Error: {data['error']}")
             st.stop()
 
-        info_title = "Total crimes: all incidents | Risk score: weighted 0-100 | Higher severity = higher score"
-        st.markdown(f'<div class="results-header"><h4 class="results-title">Results</h4><span class="info-dot subtle" title="{info_title}">?</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="results-header"><h4 class="results-title">Results</h4></div>', unsafe_allow_html=True)
 
         # Auto-scroll to results
         if st.session_state.should_scroll:
@@ -634,7 +745,7 @@ if st.session_state.has_run:
             fig_cat.add_trace(go.Bar(name=data['postcode_a'], x=df_cat['Category'], y=df_cat.get(data['postcode_a'], []),
                                     marker_color='#0d9488', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_cat.add_trace(go.Bar(name=data['postcode_b'], x=df_cat['Category'], y=df_cat.get(data['postcode_b'], []),
-                                    marker_color='#f97316', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                    marker_color='#3b82f6', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_cat.update_layout(title="Crime Types Side-by-Side", xaxis_title="", yaxis_title="Incidents",
                                 barmode='group', height=420, xaxis_tickangle=-45,
                                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -672,7 +783,7 @@ if st.session_state.has_run:
             fig_trend.add_trace(go.Scatter(x=trend_df[trend_df['Postcode'] == data['postcode_b']]['Month'],
                                           y=trend_df[trend_df['Postcode'] == data['postcode_b']]['Count'],
                                           mode='lines+markers', name=data['postcode_b'],
-                                          line=dict(color='#f97316', width=3), marker=dict(size=10)))
+                                          line=dict(color='#3b82f6', width=3), marker=dict(size=10)))
             fig_trend.update_layout(title=f"{trend_labels.get(selected_trend)}", xaxis_title="", yaxis_title="Incidents",
                                   height=420, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                   font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
@@ -698,6 +809,46 @@ if st.session_state.has_run:
                                   height=420, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                   font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             st.plotly_chart(fig_sev, use_container_width=True, key="severity_month", config={"displayModeBar": False})
+
+            # Monthly Summary - Enhanced
+            total_a_m = m_a.get("total_crimes", 0)
+            total_b_m = m_b.get("total_crimes", 0)
+            risk_level_a = get_risk_level(m_a.get("risk_score", 0))
+            risk_level_b = get_risk_level(m_b.get("risk_score", 0))
+            cat_a_m = m_a.get("by_category", {})
+            cat_b_m = m_b.get("by_category", {})
+            
+            # Calculate metrics
+            safer_text = calc_safer_text(total_a_m, total_b_m, data['postcode_a'], data['postcode_b'])
+            top_cat_a, top_pct_a = calc_top_category(cat_a_m, total_a_m)
+            top_cat_b, top_pct_b = calc_top_category(cat_b_m, total_b_m)
+            differences = calc_key_differences(cat_a_m, cat_b_m, limit=3)
+            diff_html = format_differences_html(differences)
+            
+            summary_html = f'''<div class="text-summary fade-in">
+<h4>Summary — {format_month_label(selected_month)}</h4>
+<p class="winner-line">{safer_text}</p>
+<div class="summary-grid">
+<div class="summary-col summary-col-a">
+<div class="summary-postcode">{data['postcode_a']}</div>
+<div class="summary-stat"><span class="stat-value">{total_a_m}</span> crimes</div>
+<div class="summary-stat">Risk: <span class="stat-value">{m_a.get("risk_score", 0)}</span> <span class="badge {get_risk_badge_class(m_a.get('risk_score', 0))}">{risk_level_a}</span></div>
+</div>
+<div class="summary-col summary-col-b">
+<div class="summary-postcode">{data['postcode_b']}</div>
+<div class="summary-stat"><span class="stat-value">{total_b_m}</span> crimes</div>
+<div class="summary-stat">Risk: <span class="stat-value">{m_b.get("risk_score", 0)}</span> <span class="badge {get_risk_badge_class(m_b.get('risk_score', 0))}">{risk_level_b}</span></div>
+</div>
+</div>
+<div class="summary-section">
+<strong>Key differences:</strong><br>{diff_html}
+</div>
+<div class="summary-section">
+<strong>Top concern:</strong><br>• {data['postcode_a']}: {top_cat_a} ({top_pct_a}%)<br>• {data['postcode_b']}: {top_cat_b} ({top_pct_b}%)
+</div>
+<p class="summary-footer"><em>Data within {data['radius']} of each postcode.</em></p>
+</div>'''
+            st.markdown(summary_html, unsafe_allow_html=True)
 
         with tab_quarter:
             st.caption(f"Search area: {data['radius']}")
@@ -768,7 +919,7 @@ if st.session_state.has_run:
             fig_q_cat.add_trace(go.Bar(name=data['postcode_a'], x=df_q_cat['Category'], y=df_q_cat[data['postcode_a']],
                                       marker_color='#0d9488', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_q_cat.add_trace(go.Bar(name=data['postcode_b'], x=df_q_cat['Category'], y=df_q_cat[data['postcode_b']],
-                                      marker_color='#f97316', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                      marker_color='#3b82f6', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_q_cat.update_layout(title="Crime Types Side-by-Side", xaxis_title="", yaxis_title="Incidents",
                                   barmode='group', height=460, xaxis_tickangle=-45,
                                   paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -787,7 +938,7 @@ if st.session_state.has_run:
             fig_group.add_trace(go.Bar(name=data['postcode_a'], x=grouped_df["Group"], y=grouped_df[data['postcode_a']],
                                        marker_color='#0d9488', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_group.add_trace(go.Bar(name=data['postcode_b'], x=grouped_df["Group"], y=grouped_df[data['postcode_b']],
-                                       marker_color='#f97316', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
+                                       marker_color='#3b82f6', hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>'))
             fig_group.update_layout(title="Crime profile (grouped categories)", xaxis_title="", yaxis_title="Incidents",
                                     barmode='group', height=420,
                                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -811,19 +962,61 @@ if st.session_state.has_run:
                                     font=dict(family='Plus Jakarta Sans, DM Sans, sans-serif', size=12))
             st.plotly_chart(fig_sev_q, use_container_width=True, key="severity_quarter", config={"displayModeBar": False})
 
-        st.markdown(f'''<div class="text-summary fade-in"><h4>Summary</h4><p>
-            <strong>{data['postcode_a']}</strong> recorded <strong>{data['a']['total']} total crimes</strong> 
-            in {format_month_label(selected_month)} with a risk score of <strong>{data['a']['risk_score']}</strong> 
-            (<span class="badge {get_risk_badge_class(data['a']['risk_score'])}">{data['a']['risk_level']} Risk</span>).
-            <br><br><strong>{data['postcode_b']}</strong> recorded <strong>{data['b']['total']} total crimes</strong> 
-            with a risk score of <strong>{data['b']['risk_score']}</strong> 
-            (<span class="badge {get_risk_badge_class(data['b']['risk_score'])}">{data['b']['risk_level']} Risk</span>).
-            <br><br>Violence: <strong>{data['a']['violent']}</strong> vs <strong>{data['b']['violent']}</strong> | 
-            Burglary: <strong>{data['a']['burglary']}</strong> vs <strong>{data['b']['burglary']}</strong>.
-            <br><br>Quarter totals: <strong>{data['quarter']['a']['total']}</strong> vs <strong>{data['quarter']['b']['total']}</strong> 
-            across {format_month_range(data['quarter']['months'])}.
-            <br><br><em>Data within {data['radius']} of each postcode.</em>
-        </p></div>''', unsafe_allow_html=True)
+            # Quarter Summary - Enhanced with Trend
+            total_a_q = q_a['total']
+            total_b_q = q_b['total']
+            cat_a_q = q_a.get('by_category', {})
+            cat_b_q = q_b.get('by_category', {})
+            quarter_months = data['quarter']['months']
+            
+            # Calculate metrics
+            safer_text_q = calc_safer_text(total_a_q, total_b_q, data['postcode_a'], data['postcode_b'])
+            top_cat_a_q, top_pct_a_q = calc_top_category(cat_a_q, total_a_q)
+            top_cat_b_q, top_pct_b_q = calc_top_category(cat_b_q, total_b_q)
+            differences_q = calc_key_differences(cat_a_q, cat_b_q, limit=3)
+            diff_html_q = format_differences_html(differences_q)
+            
+            # Calculate trends
+            monthly_a = data.get('monthly', {}).get('a', {})
+            monthly_b = data.get('monthly', {}).get('b', {})
+            trend_pct_a, trend_text_a = calc_trend(monthly_a, quarter_months)
+            trend_pct_b, trend_text_b = calc_trend(monthly_b, quarter_months)
+            monthly_vals_a = get_monthly_values(monthly_a, quarter_months)
+            monthly_vals_b = get_monthly_values(monthly_b, quarter_months)
+            
+            # Monthly average
+            avg_a = round(total_a_q / len(quarter_months)) if quarter_months else 0
+            avg_b = round(total_b_q / len(quarter_months)) if quarter_months else 0
+            
+            summary_html_q = f'''<div class="text-summary fade-in">
+<h4>Summary — {format_month_range(quarter_months)}</h4>
+<p class="winner-line">{safer_text_q}</p>
+<div class="summary-grid">
+<div class="summary-col summary-col-a">
+<div class="summary-postcode">{data['postcode_a']}</div>
+<div class="summary-stat"><span class="stat-value">{total_a_q}</span> crimes (~{avg_a}/month)</div>
+<div class="summary-stat">Risk: <span class="stat-value">{q_a['risk_score']}</span> <span class="badge {get_risk_badge_class(q_a['risk_score'])}">{q_a['risk_level']}</span></div>
+<div class="summary-stat">Trend: <span class="stat-value">{trend_text_a}</span></div>
+</div>
+<div class="summary-col summary-col-b">
+<div class="summary-postcode">{data['postcode_b']}</div>
+<div class="summary-stat"><span class="stat-value">{total_b_q}</span> crimes (~{avg_b}/month)</div>
+<div class="summary-stat">Risk: <span class="stat-value">{q_b['risk_score']}</span> <span class="badge {get_risk_badge_class(q_b['risk_score'])}">{q_b['risk_level']}</span></div>
+<div class="summary-stat">Trend: <span class="stat-value">{trend_text_b}</span></div>
+</div>
+</div>
+<div class="summary-section">
+<strong>Key differences:</strong><br>{diff_html_q}
+</div>
+<div class="summary-section">
+<strong>Top concern:</strong><br>• {data['postcode_a']}: {top_cat_a_q} ({top_pct_a_q}%)<br>• {data['postcode_b']}: {top_cat_b_q} ({top_pct_b_q}%)
+</div>
+<div class="summary-section">
+<strong>3-month trend:</strong><br>• {data['postcode_a']}: {monthly_vals_a} ({trend_text_a})<br>• {data['postcode_b']}: {monthly_vals_b} ({trend_text_b})
+</div>
+<p class="summary-footer"><em>Data within {data['radius']} of each postcode.</em></p>
+</div>'''
+            st.markdown(summary_html_q, unsafe_allow_html=True)
 
         # ======================== INTERACTIVE MAP ========================
         if 'coords' in data:

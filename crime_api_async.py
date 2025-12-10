@@ -342,7 +342,7 @@ def summarize_crimes(events: List[Dict[str, Any]]) -> Dict[str, Any]:
         "total_crimes": total,
         "by_category": by_cat,
         "weighted_sum": weighted,
-        "risk_score": round(risk, 2),
+        "risk_score": round(risk),
         "top_categories": top_cats
     }
 
