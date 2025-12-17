@@ -407,8 +407,8 @@ if not supabase_available():
 query_params = st.query_params
 admin_key_env = os.getenv("ADMIN_KEY")
 is_admin = "admin" in query_params and admin_key_env and query_params["admin"] == admin_key_env
-is_embedded = query_params.get("embed") == "true"
-st.warning(f"DEBUG: all params = {dict(query_params)}")
+is_embedded = query_params.get("mode") == "embedded"
+
 if is_admin:
     st.title("🛠 Admin Panel")
     try:
