@@ -407,6 +407,7 @@ if not supabase_available():
 query_params = st.query_params
 admin_key_env = os.getenv("ADMIN_KEY")
 is_admin = "admin" in query_params and admin_key_env and query_params["admin"] == admin_key_env
+is_embedded = query_params.get("embed") == "true"
 
 if is_admin:
     st.title("🛠 Admin Panel")
@@ -448,20 +449,21 @@ except Exception as e:
     st.stop()
 
 # ======================== HEADER ========================
-st.markdown('''
-<div class="header">
-    <h1>🛡️ CrimeCompare</h1>
-    <div class="subtitle">See the real picture across England</div>
-</div>
-''', unsafe_allow_html=True)
+if not is_embedded:
+    st.markdown('''
+    <div class="header">
+        <h1>🛡️ CrimeCompare</h1>
+        <div class="subtitle">See the real picture across England</div>
+    </div>
+    ''', unsafe_allow_html=True)
 
-# Trust bar
-st.markdown('''
-<div class="trust-bar fade-in">
-    <div class="trust-item"><span class="icon">⚖️</span> Side by side</div>
-    <div class="trust-item"><span class="icon">⚡</span> Most Current Police Data</div>
-</div>
-''', unsafe_allow_html=True)
+    # Trust bar
+    st.markdown('''
+    <div class="trust-bar fade-in">
+        <div class="trust-item"><span class="icon">⚖️</span> Side by side</div>
+        <div class="trust-item"><span class="icon">⚡</span> Most Current Police Data</div>
+    </div>
+    ''', unsafe_allow_html=True)
 
 # ======================== INPUT SECTION ========================
 spacer1, colA, colB, colRadius, spacer2 = st.columns([1, 3, 3, 2, 1], gap="medium")
@@ -1070,15 +1072,16 @@ with st.expander("💬 Share Your Feedback", expanded=False):
                     st.error(f"Failed: {e}")
 
 # ======================== FOOTER ========================
-st.markdown('''
-<div class="footer-minimal">
-    Contains public sector information licensed under the 
-    <a href="http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank">Open Government Licence v3.0</a>.
-    <br>
-    Data Sources: 
-    <a href="https://data.police.uk/" target="_blank">Police.uk API</a> | 
-    <a href="https://geoportal.statistics.gov.uk/" target="_blank">ONS Postcode Directory</a>
-    <br>
-    CrimeCompare © 2025
-</div>
-''', unsafe_allow_html=True)
+if not is_embedded:
+    st.markdown('''
+    <div class="footer-minimal">
+        Contains public sector information licensed under the 
+        <a href="http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank">Open Government Licence v3.0</a>.
+        <br>
+        Data Sources: 
+        <a href="https://data.police.uk/" target="_blank">Police.uk API</a> | 
+        <a href="https://geoportal.statistics.gov.uk/" target="_blank">ONS Postcode Directory</a>
+        <br>
+        CrimeCompare © 2025
+    </div>
+    ''', unsafe_allow_html=True)
